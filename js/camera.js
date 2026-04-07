@@ -270,7 +270,7 @@ function describeConstraints(value) {
 /**
  * @param {unknown} err
  */
-function describeError(err) {
+export function describeError(err) {
   if (err && typeof err === 'object' && 'name' in err && 'message' in err) {
     const e = /** @type {{ name?: string, message?: string }} */ (err);
     return `${e.name || 'Error'}: ${e.message || ''}`.trim();

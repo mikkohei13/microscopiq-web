@@ -4,6 +4,7 @@ import {
   stopCamera,
   captureStill,
   runBurst,
+  describeError,
 } from './camera.js';
 import { setupOverlayResize, syncCanvasSize } from './overlay.js';
 import { createCalibrationController } from './calibration.js';
@@ -195,11 +196,7 @@ btnStart.addEventListener('click', async () => {
       { once: true }
     );
   } catch (e) {
-    const msg =
-      e && typeof e === 'object' && 'message' in e
-        ? String(/** @type {{ message?: string }} */ (e).message)
-        : 'Could not access camera';
-    showError(msg);
+    showError(describeError(e) || 'Could not access camera');
     setCameraActive(false);
   } finally {
     cameraStarting = false;
@@ -265,20 +262,16 @@ function parseBurstOptions() {
   return { count, intervalMs: Math.round(intervalSec * 1000) };
 }
 
-function isBurstMode() {
-  const burst = document.querySelector(
-    'input[name="capture-mode"]:checked'
-  );
-  return burst?.value === 'burst';
-}
+let burstMode = false;
 
 modeRadios.forEach((r) => {
   r.addEventListener('change', () => {
-    burstControls.classList.toggle('hidden', !isBurstMode());
+    burstMode = r.checked && r.value === 'burst';
+    burstControls.classList.toggle('hidden', !burstMode);
   });
 });
 
-burstControls.classList.toggle('hidden', !isBurstMode());
+burstControls.classList.toggle('hidden', !burstMode);
 
 /**
  * @param {Blob} rawBlob
@@ -301,7 +294,7 @@ async function doCapture(withMeasurements = false) {
   if (!cameraHandle?.stream || burstInProgress) return;
   hideError();
 
-  if (isBurstMode()) {
+  if (burstMode) {
     const { count, intervalMs } = parseBurstOptions();
     const measuredLines = withMeasurements ? measurement.getLines() : [];
     burstInProgress = true;
@@ -327,11 +320,7 @@ async function doCapture(withMeasurements = false) {
         },
       });
     } catch (e) {
-      const msg =
-        e && typeof e === 'object' && 'message' in e
-          ? String(/** @type {{ message?: string }} */ (e).message)
-          : 'Capture failed';
-      showError(msg);
+      showError(describeError(e) || 'Capture failed');
     } finally {
       burstInProgress = false;
       btnCapture.disabled = !cameraActive;
@@ -346,11 +335,7 @@ async function doCapture(withMeasurements = false) {
     const blob = await captureStill(cameraHandle, video);
     await exportCapture(blob, withMeasurements);
   } catch (e) {
-    const msg =
-      e && typeof e === 'object' && 'message' in e
-        ? String(/** @type {{ message?: string }} */ (e).message)
-        : 'Capture failed';
-    showError(msg);
+    showError(describeError(e) || 'Capture failed');
   }
 }
 
