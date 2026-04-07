@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Microscopiq</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="preview-area">
+      <video id="preview" autoplay muted playsinline></video>
+      <canvas id="overlay" aria-label="Calibration and measurement overlay"></canvas>
+      <div id="error-overlay" class="hidden" role="alert"></div>
+      <div id="red-flash" class="hidden" aria-hidden="true"></div>
+    </div>
+
+    <div id="control-bar">
+      <div class="control-group">
+        <button type="button" id="btn-start-camera">Start camera</button>
+      </div>
+      <div class="control-group mode-row" role="group" aria-label="Capture mode">
+        <label class="segmented">
+          <input type="radio" name="capture-mode" value="normal" checked />
+          <span>Normal</span>
+        </label>
+        <label class="segmented">
+          <input type="radio" name="capture-mode" value="burst" />
+          <span>Burst</span>
+        </label>
+      </div>
+      <div class="control-group burst-controls hidden" id="burst-controls">
+        <label>Frames <input type="number" id="burst-count" min="1" max="30" value="5" /></label>
+        <label>Interval (s) <input type="number" id="burst-interval" min="0.1" max="1" step="0.1" value="0.2" /></label>
+      </div>
+      <div class="control-group">
+        <button type="button" id="btn-calibrate">Calibrate</button>
+        <button type="button" id="btn-calibration-done" class="hidden">Calibration done</button>
+        <button type="button" id="btn-calibration-cancel" class="hidden">Cancel calibration</button>
+      </div>
+      <div class="control-group">
+        <button type="button" id="btn-measure">Measure</button>
+        <button type="button" id="btn-clear-measurements" disabled>Clear</button>
+        <button type="button" id="btn-delete-measurement" disabled>Delete selected</button>
+      </div>
+      <div class="control-group">
+        <button type="button" id="btn-capture">Capture</button>
+        <button type="button" id="btn-capture-with-measurements">Capture with measurements</button>
+      </div>
+    </div>
+
+    <!-- Hidden buttons for keyboard shortcuts (screen reader / focus) -->
+    <div class="sr-only">
+      <button type="button" id="kbd-capture">Capture shortcut</button>
+      <button type="button" id="kbd-capture-with-measurements">Capture with measurements shortcut</button>
+      <button type="button" id="kbd-cancel-burst">Cancel burst shortcut</button>
+    </div>
+  </div>
+
+  <dialog id="calibration-dialog">
+    <form method="dialog" id="calibration-form">
+      <h2>Calibration</h2>
+      <p>Enter the known distance (in millimeters) that you will align the line to.</p>
+      <label>
+        Distance (mm)
+        <input type="number" id="calibration-mm" min="1" max="100" value="10" required />
+      </label>
+      <div class="dialog-actions">
+        <button type="submit" value="start" id="calibration-start-btn">Start adjusting</button>
+        <button type="button" value="cancel" id="calibration-dialog-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/app.js?v=2"></script>
+</body>
+</html>
