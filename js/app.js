@@ -75,43 +75,7 @@ function hideError() {
  */
 function setCameraActive(active) {
   cameraActive = active;
-  if (!active) {
-    modeRadios.forEach((r) => {
-      r.disabled = true;
-    });
-    if (modeRow) {
-      modeRow.classList.add('is-disabled');
-      modeRow.setAttribute('aria-disabled', 'true');
-    }
-    burstCountInput.disabled = true;
-    burstIntervalInput.disabled = true;
-    btnCalibrate.disabled = true;
-    btnCalibrationDone.disabled = true;
-    btnCalibrationCancel.disabled = true;
-    btnClearMeasurements.disabled = true;
-    btnDeleteMeasurement.disabled = true;
-    btnCapture.disabled = true;
-    btnCaptureWithMeasurements.disabled = true;
-    kbdCapture.disabled = true;
-    kbdCaptureWithMeasurements.disabled = true;
-    kbdCancelBurst.disabled = true;
-  } else {
-    modeRadios.forEach((r) => {
-      r.disabled = false;
-    });
-    if (modeRow) {
-      modeRow.classList.remove('is-disabled');
-      modeRow.setAttribute('aria-disabled', 'false');
-    }
-    burstCountInput.disabled = false;
-    burstIntervalInput.disabled = false;
-    kbdCapture.disabled = false;
-    kbdCaptureWithMeasurements.disabled = false;
-    kbdCancelBurst.disabled = !burstInProgress;
-    btnCapture.disabled = burstInProgress;
-    btnCaptureWithMeasurements.disabled = burstInProgress;
-    onCalibrationStateChange();
-  }
+  renderUiState();
 }
 
 function flashCapture() {
@@ -146,26 +110,49 @@ const measurement = createMeasurementController({
 });
 
 function onCalibrationStateChange() {
-  const phase = calibration.getPhase();
-  btnCalibrationDone.classList.toggle('hidden', phase !== 'adjusting');
-  btnCalibrationCancel.classList.toggle('hidden', phase !== 'adjusting');
-  btnCalibrationDone.disabled = !cameraActive || phase !== 'adjusting';
-  btnCalibrationCancel.disabled = !cameraActive || phase !== 'adjusting';
-  btnCalibrate.disabled = !cameraActive || phase === 'adjusting';
-  overlay.classList.toggle('calibration-cursor', phase === 'adjusting');
-  const shouldMeasureBeActive = cameraActive && phase !== 'adjusting';
-  measurement.setActive(shouldMeasureBeActive);
-  overlay.classList.toggle('measure-cursor', shouldMeasureBeActive);
-  updateMeasurementControls();
+  renderUiState();
   redraw();
 }
 
-function updateMeasurementControls() {
+function renderUiState() {
+  const phase = calibration.getPhase();
+  const isAdjusting = phase === 'adjusting';
+  const canUseControls = cameraActive;
+
+  modeRadios.forEach((r) => {
+    r.disabled = !canUseControls;
+  });
+  if (modeRow) {
+    modeRow.classList.toggle('is-disabled', !canUseControls);
+    modeRow.setAttribute('aria-disabled', canUseControls ? 'false' : 'true');
+  }
+  burstCountInput.disabled = !canUseControls;
+  burstIntervalInput.disabled = !canUseControls;
+
+  btnCalibrationDone.classList.toggle('hidden', phase !== 'adjusting');
+  btnCalibrationCancel.classList.toggle('hidden', phase !== 'adjusting');
+  btnCalibrationDone.disabled = !canUseControls || !isAdjusting;
+  btnCalibrationCancel.disabled = !canUseControls || !isAdjusting;
+  btnCalibrate.disabled = !canUseControls || isAdjusting;
+
+  const shouldMeasureBeActive = canUseControls && !isAdjusting;
+  measurement.setActive(shouldMeasureBeActive);
+  overlay.classList.toggle('calibration-cursor', isAdjusting);
+  overlay.classList.toggle('measure-cursor', shouldMeasureBeActive);
+
   btnClearMeasurements.disabled =
-    !cameraActive ||
+    !canUseControls ||
     (!measurement.hasLines() && !measurement.isActive());
   btnDeleteMeasurement.disabled =
-    !cameraActive || !measurement.hasSelection();
+    !canUseControls || !measurement.hasSelection();
+
+  const canCapture = canUseControls && !burstInProgress;
+  btnCapture.disabled = !canCapture;
+  btnCaptureWithMeasurements.disabled = !canCapture;
+
+  kbdCapture.disabled = !canUseControls;
+  kbdCaptureWithMeasurements.disabled = !canUseControls;
+  kbdCancelBurst.disabled = !canUseControls || !burstInProgress;
 }
 
 setupOverlayResize(overlay, previewArea, video, redraw);
@@ -178,6 +165,9 @@ btnStart.addEventListener('click', async () => {
     video.srcObject = null;
     btnStart.textContent = 'Start camera';
     setCameraActive(false);
+    // Camera stream characteristics can change between sessions, so
+    // calibration must be recomputed after each restart.
+    calibration.clearCalibration();
     hideError();
     return;
   }
@@ -240,13 +230,13 @@ btnCalibrationCancel.addEventListener('click', () => {
 
 btnClearMeasurements.addEventListener('click', () => {
   measurement.clear();
-  updateMeasurementControls();
+  renderUiState();
 });
 
 btnDeleteMeasurement.addEventListener('click', () => {
   const deleted = measurement.deleteSelected();
   if (deleted) {
-    updateMeasurementControls();
+    renderUiState();
   }
 });
 
@@ -299,9 +289,7 @@ async function doCapture(withMeasurements = false) {
     const measuredLines = withMeasurements ? measurement.getLines() : [];
     burstInProgress = true;
     burstCancelled = false;
-    btnCapture.disabled = true;
-    btnCaptureWithMeasurements.disabled = true;
-    kbdCancelBurst.disabled = false;
+    renderUiState();
     try {
       await runBurst(cameraHandle, video, {
         count,
@@ -323,9 +311,7 @@ async function doCapture(withMeasurements = false) {
       showError(describeError(e) || 'Capture failed');
     } finally {
       burstInProgress = false;
-      btnCapture.disabled = !cameraActive;
-      btnCaptureWithMeasurements.disabled = !cameraActive;
-      kbdCancelBurst.disabled = !cameraActive;
+      renderUiState();
     }
     return;
   }
@@ -384,7 +370,7 @@ overlay.addEventListener('pointerdown', (e) => {
     calibration.onPointerDown(e);
   } else if (measurement.isActive()) {
     measurement.onPointerDown(e);
-    updateMeasurementControls();
+    renderUiState();
   }
 });
 overlay.addEventListener('pointermove', (e) => {
@@ -392,7 +378,7 @@ overlay.addEventListener('pointermove', (e) => {
     calibration.onPointerMove(e);
   } else if (measurement.isActive()) {
     measurement.onPointerMove(e);
-    updateMeasurementControls();
+    renderUiState();
   }
 });
 overlay.addEventListener('pointerup', (e) => {
@@ -400,7 +386,7 @@ overlay.addEventListener('pointerup', (e) => {
     calibration.onPointerUp(e);
   } else if (measurement.isActive()) {
     measurement.onPointerUp(e);
-    updateMeasurementControls();
+    renderUiState();
   }
 });
 overlay.addEventListener('pointercancel', (e) => {
@@ -408,7 +394,7 @@ overlay.addEventListener('pointercancel', (e) => {
     calibration.onPointerUp(e);
   } else if (measurement.isActive()) {
     measurement.onPointerUp(e);
-    updateMeasurementControls();
+    renderUiState();
   }
 });
 
