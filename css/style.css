@@ -216,7 +216,7 @@ button.primary {
 
 #calibration-dialog {
   max-width: 22rem;
-  padding: 0;
+  padding: 1rem;
   border: 1px solid #444;
   border-radius: 10px;
   background: #222;
