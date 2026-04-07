@@ -76,22 +76,18 @@ body {
   display: none;
 }
 
-#red-flash {
+#capture-flash {
   position: absolute;
   inset: 0;
-  background: rgba(255, 0, 0, 0.35);
+  background: rgba(0, 255, 80, 0.35);
   pointer-events: none;
   z-index: 4;
   opacity: 0;
   transition: opacity 0.08s ease-out;
 }
 
-#red-flash.visible {
+#capture-flash.visible {
   opacity: 1;
-}
-
-#red-flash.hidden {
-  display: none;
 }
 
 #control-bar {

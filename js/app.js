@@ -18,7 +18,7 @@ const previewArea = document.getElementById('preview-area');
 const video = document.getElementById('preview');
 const overlay = document.getElementById('overlay');
 const errorOverlay = document.getElementById('error-overlay');
-const redFlash = document.getElementById('red-flash');
+const captureFlash = document.getElementById('capture-flash');
 
 const btnStart = document.getElementById('btn-start-camera');
 const btnCalibrate = document.getElementById('btn-calibrate');
@@ -112,13 +112,11 @@ function setCameraActive(active) {
   }
 }
 
-function flashRed() {
-  redFlash.classList.remove('hidden');
-  redFlash.classList.add('visible');
+function flashCapture() {
+  captureFlash.classList.add('visible');
   requestAnimationFrame(() => {
     setTimeout(() => {
-      redFlash.classList.remove('visible');
-      redFlash.classList.add('hidden');
+      captureFlash.classList.remove('visible');
     }, 80);
   });
 }
@@ -311,7 +309,7 @@ async function doCapture(withMeasurements = false) {
         intervalMs,
         isCancelled: () => burstCancelled,
         onFrame: async (i, blob) => {
-          flashRed();
+          flashCapture();
           const px = calibration.getPxPerMm();
           const finalBlob = await composePngWithScaleBar(blob, px, {
             withMeasurements,
@@ -338,7 +336,7 @@ async function doCapture(withMeasurements = false) {
   }
 
   try {
-    flashRed();
+    flashCapture();
     const blob = await captureStill(cameraHandle, video);
     await exportCapture(blob, withMeasurements);
   } catch (e) {
@@ -386,7 +384,6 @@ document.addEventListener('keydown', (e) => {
     if (burstInProgress) {
       e.preventDefault();
       burstCancelled = true;
-      kbdCancelBurst.click();
     }
   }
 });

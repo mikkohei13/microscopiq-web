@@ -12,7 +12,7 @@
       <video id="preview" autoplay muted playsinline></video>
       <canvas id="overlay" aria-label="Calibration and measurement overlay"></canvas>
       <div id="error-overlay" class="hidden" role="alert"></div>
-      <div id="red-flash" class="hidden" aria-hidden="true"></div>
+      <div id="capture-flash" aria-hidden="true"></div>
     </div>
 
     <div id="control-bar">
@@ -57,7 +57,7 @@
   </div>
 
   <dialog id="calibration-dialog">
-    <form method="dialog" id="calibration-form">
+    <form id="calibration-form">
       <h2>Calibration</h2>
       <p>Enter the known distance (in millimeters) that you will align the line to.</p>
       <label>
