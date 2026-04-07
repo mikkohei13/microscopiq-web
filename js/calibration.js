@@ -169,13 +169,14 @@ export function createCalibrationController(options) {
       ctx.lineTo(p2.x, p2.y);
       ctx.stroke();
       ctx.fillStyle = '#ffcc00';
-      ctx.beginPath();
-      ctx.arc(p1.x, p1.y, HANDLE_RADIUS - 2, 0, Math.PI * 2);
-      ctx.arc(p2.x, p2.y, HANDLE_RADIUS - 2, 0, Math.PI * 2);
-      ctx.fill();
       ctx.strokeStyle = '#333';
       ctx.lineWidth = 1;
-      ctx.stroke();
+      for (const p of [p1, p2]) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, HANDLE_RADIUS - 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
       ctx.restore();
     }
 

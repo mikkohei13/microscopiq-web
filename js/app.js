@@ -54,6 +54,7 @@ let cameraHandle = null;
 /** Whether the camera stream is running (controls other than Start are enabled). */
 let cameraActive = false;
 
+let cameraStarting = false;
 let burstCancelled = false;
 let burstInProgress = false;
 
@@ -122,10 +123,9 @@ function flashCapture() {
 }
 
 function redraw() {
-  const ctx = overlay.getContext('2d');
-  if (!ctx || !previewArea) return;
-  syncCanvasSize(overlay, previewArea);
-  ctx.clearRect(0, 0, overlay.clientWidth, overlay.clientHeight);
+  const ctx = syncCanvasSize(overlay, previewArea);
+  if (!ctx) return;
+  ctx.clearRect(0, 0, previewArea.clientWidth, previewArea.clientHeight);
   calibration.draw(ctx);
   measurement.draw(ctx);
 }
@@ -170,6 +170,7 @@ function updateMeasurementControls() {
 setupOverlayResize(overlay, previewArea, video, redraw);
 
 btnStart.addEventListener('click', async () => {
+  if (cameraStarting) return;
   if (cameraHandle?.stream) {
     stopCamera(cameraHandle);
     cameraHandle = null;
@@ -180,6 +181,8 @@ btnStart.addEventListener('click', async () => {
     return;
   }
   hideError();
+  cameraStarting = true;
+  btnStart.disabled = true;
   try {
     cameraHandle = await startCamera(video);
     btnStart.textContent = 'Stop camera';
@@ -198,6 +201,9 @@ btnStart.addEventListener('click', async () => {
         : 'Could not access camera';
     showError(msg);
     setCameraActive(false);
+  } finally {
+    cameraStarting = false;
+    btnStart.disabled = false;
   }
 });
 
