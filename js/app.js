@@ -24,7 +24,6 @@ const btnStart = document.getElementById('btn-start-camera');
 const btnCalibrate = document.getElementById('btn-calibrate');
 const btnCalibrationDone = document.getElementById('btn-calibration-done');
 const btnCalibrationCancel = document.getElementById('btn-calibration-cancel');
-const btnMeasure = document.getElementById('btn-measure');
 const btnClearMeasurements = document.getElementById('btn-clear-measurements');
 const btnDeleteMeasurement = document.getElementById('btn-delete-measurement');
 const btnCapture = document.getElementById('btn-capture');
@@ -87,7 +86,6 @@ function setCameraActive(active) {
     btnCalibrate.disabled = true;
     btnCalibrationDone.disabled = true;
     btnCalibrationCancel.disabled = true;
-    btnMeasure.disabled = true;
     btnClearMeasurements.disabled = true;
     btnDeleteMeasurement.disabled = true;
     btnCapture.disabled = true;
@@ -156,24 +154,14 @@ function onCalibrationStateChange() {
   btnCalibrationCancel.disabled = !cameraActive || phase !== 'adjusting';
   btnCalibrate.disabled = !cameraActive || phase === 'adjusting';
   overlay.classList.toggle('calibration-cursor', phase === 'adjusting');
-  const canMeasure = phase === 'calibrated';
-  if (!canMeasure && measurement.isActive()) {
-    measurement.setActive(false);
-    overlay.classList.remove('measure-cursor');
-  }
-  updateMeasureButton();
+  const shouldMeasureBeActive = cameraActive && phase !== 'adjusting';
+  measurement.setActive(shouldMeasureBeActive);
+  overlay.classList.toggle('measure-cursor', shouldMeasureBeActive);
+  updateMeasurementControls();
   redraw();
 }
 
-function updateMeasureButton() {
-  const phase = calibration.getPhase();
-  const canMeasure = phase === 'calibrated';
-  btnMeasure.disabled =
-    !cameraActive || !canMeasure || phase === 'adjusting';
-  if (!canMeasure && measurement.isActive()) {
-    measurement.setActive(false);
-    overlay.classList.remove('measure-cursor');
-  }
+function updateMeasurementControls() {
   btnClearMeasurements.disabled =
     !cameraActive ||
     (!measurement.hasLines() && !measurement.isActive());
@@ -249,25 +237,15 @@ btnCalibrationCancel.addEventListener('click', () => {
   redraw();
 });
 
-btnMeasure.addEventListener('click', () => {
-  if (calibration.getPhase() !== 'calibrated') return;
-  const next = !measurement.isActive();
-  measurement.setActive(next);
-  overlay.classList.toggle('measure-cursor', next);
-  btnMeasure.textContent = next ? 'Measure (on)' : 'Measure';
-  updateMeasureButton();
-  redraw();
-});
-
 btnClearMeasurements.addEventListener('click', () => {
   measurement.clear();
-  updateMeasureButton();
+  updateMeasurementControls();
 });
 
 btnDeleteMeasurement.addEventListener('click', () => {
   const deleted = measurement.deleteSelected();
   if (deleted) {
-    updateMeasureButton();
+    updateMeasurementControls();
   }
 });
 
@@ -418,7 +396,7 @@ overlay.addEventListener('pointerdown', (e) => {
     calibration.onPointerDown(e);
   } else if (measurement.isActive()) {
     measurement.onPointerDown(e);
-    updateMeasureButton();
+    updateMeasurementControls();
   }
 });
 overlay.addEventListener('pointermove', (e) => {
@@ -426,7 +404,7 @@ overlay.addEventListener('pointermove', (e) => {
     calibration.onPointerMove(e);
   } else if (measurement.isActive()) {
     measurement.onPointerMove(e);
-    updateMeasureButton();
+    updateMeasurementControls();
   }
 });
 overlay.addEventListener('pointerup', (e) => {
@@ -434,7 +412,7 @@ overlay.addEventListener('pointerup', (e) => {
     calibration.onPointerUp(e);
   } else if (measurement.isActive()) {
     measurement.onPointerUp(e);
-    updateMeasureButton();
+    updateMeasurementControls();
   }
 });
 overlay.addEventListener('pointercancel', (e) => {
@@ -442,7 +420,7 @@ overlay.addEventListener('pointercancel', (e) => {
     calibration.onPointerUp(e);
   } else if (measurement.isActive()) {
     measurement.onPointerUp(e);
-    updateMeasureButton();
+    updateMeasurementControls();
   }
 });
 
