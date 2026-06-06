@@ -263,6 +263,9 @@ function renderUiState() {
   measurement.setActive(shouldMeasureBeActive);
   overlay.classList.toggle('calibration-cursor', isAdjusting);
   overlay.classList.toggle('measure-cursor', shouldMeasureBeActive);
+  if (calibration.getPhase() !== 'calibrated') {
+    overlay.classList.remove('scale-bar-cursor', 'scale-bar-dragging');
+  }
 
   btnClearMeasurements.disabled =
     !canUseControls || !isCalibrated || !measurement.hasLines();
@@ -354,6 +357,7 @@ btnClearCalibration.addEventListener('click', () => {
   calibration.clearCalibration();
   measurement.clear();
   hideError();
+  calibrationDialog.close();
 });
 
 btnClearMeasurements.addEventListener('click', () => {
@@ -521,11 +525,38 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+/**
+ * Grab/grabbing over the scale bar hit region so it reads as draggable (not crosshair).
+ * @param {number} clientX
+ * @param {number} clientY
+ */
+function updateOverlayScaleBarCursor(clientX, clientY) {
+  if (calibration.getPhase() === 'adjusting') {
+    overlay.classList.remove('scale-bar-cursor', 'scale-bar-dragging');
+    return;
+  }
+  if (calibration.getPhase() !== 'calibrated') {
+    overlay.classList.remove('scale-bar-cursor', 'scale-bar-dragging');
+    return;
+  }
+  if (calibration.isScaleBarDragging()) {
+    overlay.classList.remove('scale-bar-cursor');
+    overlay.classList.add('scale-bar-dragging');
+    return;
+  }
+  overlay.classList.remove('scale-bar-dragging');
+  if (calibration.hitTestScaleBar(clientX, clientY)) {
+    overlay.classList.add('scale-bar-cursor');
+  } else {
+    overlay.classList.remove('scale-bar-cursor');
+  }
+}
+
 overlay.addEventListener('pointerdown', (e) => {
   if (calibration.getPhase() === 'adjusting') {
     calibration.onPointerDown(e);
   } else if (calibration.tryScaleBarPointerDown(e)) {
-    /* scale bar drag */
+    updateOverlayScaleBarCursor(e.clientX, e.clientY);
   } else if (measurement.isActive()) {
     measurement.onPointerDown(e);
     renderUiState();
@@ -540,6 +571,7 @@ overlay.addEventListener('pointermove', (e) => {
     measurement.onPointerMove(e);
     renderUiState();
   }
+  updateOverlayScaleBarCursor(e.clientX, e.clientY);
 });
 overlay.addEventListener('pointerup', (e) => {
   if (calibration.getPhase() === 'adjusting') {
@@ -550,6 +582,7 @@ overlay.addEventListener('pointerup', (e) => {
     measurement.onPointerUp(e);
     renderUiState();
   }
+  updateOverlayScaleBarCursor(e.clientX, e.clientY);
 });
 overlay.addEventListener('pointercancel', (e) => {
   if (calibration.getPhase() === 'adjusting') {
@@ -559,6 +592,12 @@ overlay.addEventListener('pointercancel', (e) => {
   } else if (measurement.isActive()) {
     measurement.onPointerUp(e);
     renderUiState();
+  }
+  updateOverlayScaleBarCursor(e.clientX, e.clientY);
+});
+overlay.addEventListener('pointerleave', (e) => {
+  if (!calibration.isScaleBarDragging()) {
+    overlay.classList.remove('scale-bar-cursor');
   }
 });
 

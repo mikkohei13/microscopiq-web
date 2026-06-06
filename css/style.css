@@ -50,6 +50,14 @@ body {
   cursor: crosshair;
 }
 
+#overlay.scale-bar-cursor {
+  cursor: grab;
+}
+
+#overlay.scale-bar-dragging {
+  cursor: grabbing;
+}
+
 #overlay.calibration-cursor {
   cursor: grab;
 }
@@ -295,8 +303,13 @@ button.primary {
   font-size: 0.9rem;
 }
 
+#calibration-mm {
+  width: 6rem;
+}
+
 .dialog-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 1.25rem;
   justify-content: flex-end;

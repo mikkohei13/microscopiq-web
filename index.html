@@ -25,10 +25,16 @@
     </div>
 
     <div id="control-bar">
+
+      <div class="control-group">
+        <button type="button" id="btn-capture">Capture</button>
+        <button type="button" id="btn-capture-with-measurements">with measurements</button>
+      </div>
+
       <div class="control-group mode-row" role="group" aria-label="Capture mode">
         <label class="segmented">
           <input type="radio" name="capture-mode" value="normal" checked />
-          <span>Normal</span>
+          <span>Single</span>
         </label>
         <label class="segmented">
           <input type="radio" name="capture-mode" value="burst" />
@@ -43,15 +49,13 @@
         <button type="button" id="btn-calibrate">Calibrate</button>
         <button type="button" id="btn-calibration-done" class="hidden">Calibration done</button>
         <button type="button" id="btn-calibration-cancel" class="hidden">Cancel calibration</button>
-        <button type="button" id="btn-clear-calibration" disabled>Clear scale</button>
       </div>
       <div class="control-group">
-        <button type="button" id="btn-clear-measurements" disabled>Clear</button>
+        Measurements:
         <button type="button" id="btn-delete-measurement" disabled>Delete selected</button>
+        <button type="button" id="btn-clear-measurements" disabled>Clear all</button>
       </div>
       <div class="control-group">
-        <button type="button" id="btn-capture">Capture</button>
-        <button type="button" id="btn-capture-with-measurements">Capture with measurements</button>
         <a class="help-link" href="help.html" target="_blank" rel="noopener noreferrer">Help</a>
       </div>
     </div>
@@ -78,7 +82,7 @@
           max="100"
           step="1"
           inputmode="numeric"
-          placeholder="e.g. 10"
+          placeholder=""
           required
           autocomplete="off"
         />
@@ -86,6 +90,7 @@
       <div class="dialog-actions">
         <button type="submit" value="start" id="calibration-start-btn">Start calibration</button>
         <button type="button" value="cancel" id="calibration-dialog-cancel">Cancel</button>
+        <button type="button" id="btn-clear-calibration" disabled>Clear scale</button>
       </div>
     </form>
   </dialog>

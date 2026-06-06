@@ -302,6 +302,19 @@ export function createCalibrationController(options) {
         ctx.fill();
         ctx.stroke();
       }
+
+      const label = `Align to ${knownMm} mm`;
+      ctx.font = '13px system-ui, sans-serif';
+      const pad = 4;
+      const tw = ctx.measureText(label).width;
+      const mx = (p1.x + p2.x) / 2;
+      const my = (p1.y + p2.y) / 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.fillRect(mx - tw / 2 - pad, my - 20, tw + pad * 2, 18);
+      ctx.fillStyle = '#fff3bf';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, mx, my - 7);
+
       ctx.restore();
     }
 
@@ -361,6 +374,7 @@ export function createCalibrationController(options) {
     getKnownMm,
     getScaleBarAnchor,
     isScaleBarDragging,
+    hitTestScaleBar,
     tryScaleBarPointerDown,
     tryScaleBarPointerMove,
     tryScaleBarPointerUp,
