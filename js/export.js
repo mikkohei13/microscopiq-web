@@ -11,13 +11,33 @@
  * @param {number} width
  * @param {number} height
  * @param {number} pxPerMm
+ * @param {{ nx: number, ny: number } | null | undefined} [anchor] Normalized left baseline (0–1); omit for default corner placement.
  */
-export function drawScaleBarOnCanvas(ctx, width, height, pxPerMm) {
+export function drawScaleBarOnCanvas(ctx, width, height, pxPerMm, anchor) {
   const barLen = pxPerMm * 1;
   if (barLen < 4) return;
   const margin = Math.round(Math.min(width, height) * 0.02);
-  const y = height - margin;
-  const x0 = margin;
+  const fontSize = Math.max(12, Math.round(height / 80));
+  let x0;
+  let y;
+  if (
+    anchor &&
+    typeof anchor.nx === 'number' &&
+    typeof anchor.ny === 'number' &&
+    Number.isFinite(anchor.nx) &&
+    Number.isFinite(anchor.ny)
+  ) {
+    x0 = anchor.nx * width;
+    y = anchor.ny * height;
+    const labelClearance = fontSize * 1.1;
+    const yMin = margin + labelClearance;
+    const yMax = height - margin;
+    x0 = clamp(x0, margin, width - margin - barLen);
+    y = clamp(y, yMin, yMax);
+  } else {
+    y = height - margin;
+    x0 = margin;
+  }
   const x1 = x0 + barLen;
   ctx.save();
   ctx.lineWidth = Math.max(2, Math.round(height / 400));
@@ -32,7 +52,6 @@ export function drawScaleBarOnCanvas(ctx, width, height, pxPerMm) {
   ctx.moveTo(x0, y);
   ctx.lineTo(x1, y);
   ctx.stroke();
-  const fontSize = Math.max(12, Math.round(height / 80));
   ctx.fillStyle = '#fff';
   ctx.strokeStyle = '#000';
   ctx.lineWidth = 2;
@@ -43,14 +62,22 @@ export function drawScaleBarOnCanvas(ctx, width, height, pxPerMm) {
   ctx.restore();
 }
 
+function clamp(v, min, max) {
+  return Math.min(max, Math.max(min, v));
+}
+
 /**
  * @param {Blob} imageBlob
  * @param {number | null} pxPerMm Source pixels per mm.
- * @param {{ withMeasurements?: boolean, measurements?: NormSegment[] }} [options]
+ * @param {{ withMeasurements?: boolean, measurements?: NormSegment[], scaleBarAnchor?: { nx: number, ny: number } | null }} [options]
  * @returns {Promise<Blob>}
  */
 export async function composePngWithScaleBar(imageBlob, pxPerMm, options = {}) {
-  const { withMeasurements = false, measurements = [] } = options;
+  const {
+    withMeasurements = false,
+    measurements = [],
+    scaleBarAnchor = null,
+  } = options;
   const bitmap = await createImageBitmap(imageBlob);
   const width = bitmap.width;
   const height = bitmap.height;
@@ -62,7 +89,7 @@ export async function composePngWithScaleBar(imageBlob, pxPerMm, options = {}) {
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
   if (pxPerMm != null && pxPerMm > 0) {
-    drawScaleBarOnCanvas(ctx, width, height, pxPerMm);
+    drawScaleBarOnCanvas(ctx, width, height, pxPerMm, scaleBarAnchor);
   }
   if (withMeasurements && measurements.length > 0) {
     drawMeasurementsOnCanvas(ctx, width, height, measurements, pxPerMm);

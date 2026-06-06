@@ -58,6 +58,48 @@ body {
   cursor: grabbing;
 }
 
+.camera-idle-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(0, 0, 0, 0.55);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.camera-idle-inner {
+  display: flex;
+  max-width: 26rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.camera-idle-headline {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  color: #eee;
+}
+
+.camera-idle-detail {
+  margin: 0;
+  max-width: 100%;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: #aaa;
+  word-break: break-word;
+}
+
+.camera-start-btn {
+  padding: 0.65rem 1.35rem;
+  font-size: 1rem;
+}
+
 #error-overlay {
   position: absolute;
   inset: 0;
@@ -192,6 +234,18 @@ button:disabled {
 button.primary {
   background: #2563eb;
   border-color: #3b82f6;
+}
+
+.help-link {
+  align-self: center;
+  font-size: 0.875rem;
+  color: #93c5fd;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.help-link:hover {
+  color: #bfdbfe;
 }
 
 .hidden {

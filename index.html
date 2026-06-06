@@ -11,14 +11,20 @@
     <div id="preview-area">
       <video id="preview" autoplay muted playsinline></video>
       <canvas id="overlay" aria-label="Calibration and measurement overlay"></canvas>
+      <div id="camera-idle-layer" class="camera-idle-layer" role="region" aria-label="Camera">
+        <div class="camera-idle-inner">
+          <p id="camera-idle-headline" class="camera-idle-headline">Start the camera to begin.</p>
+          <p id="camera-idle-detail" class="camera-idle-detail hidden"></p>
+          <button type="button" id="btn-start-camera-center" class="camera-start-btn">
+            Start camera
+          </button>
+        </div>
+      </div>
       <div id="error-overlay" class="hidden" role="alert"></div>
       <div id="capture-flash" aria-hidden="true"></div>
     </div>
 
     <div id="control-bar">
-      <div class="control-group">
-        <button type="button" id="btn-start-camera">Start camera</button>
-      </div>
       <div class="control-group mode-row" role="group" aria-label="Capture mode">
         <label class="segmented">
           <input type="radio" name="capture-mode" value="normal" checked />
@@ -37,6 +43,7 @@
         <button type="button" id="btn-calibrate">Calibrate</button>
         <button type="button" id="btn-calibration-done" class="hidden">Calibration done</button>
         <button type="button" id="btn-calibration-cancel" class="hidden">Cancel calibration</button>
+        <button type="button" id="btn-clear-calibration" disabled>Clear scale</button>
       </div>
       <div class="control-group">
         <button type="button" id="btn-clear-measurements" disabled>Clear</button>
@@ -45,6 +52,7 @@
       <div class="control-group">
         <button type="button" id="btn-capture">Capture</button>
         <button type="button" id="btn-capture-with-measurements">Capture with measurements</button>
+        <a class="help-link" href="help.html" target="_blank" rel="noopener noreferrer">Help</a>
       </div>
     </div>
 
@@ -62,7 +70,18 @@
       <p>Enter the known distance (in millimeters) that you will align the line to.</p>
       <label>
         Distance (mm)
-        <input type="number" id="calibration-mm" min="1" max="100" value="10" required />
+        <input
+          type="number"
+          id="calibration-mm"
+          name="calibrationMm"
+          min="1"
+          max="100"
+          step="1"
+          inputmode="numeric"
+          placeholder="e.g. 10"
+          required
+          autocomplete="off"
+        />
       </label>
       <div class="dialog-actions">
         <button type="submit" value="start" id="calibration-start-btn">Start calibration</button>
@@ -71,6 +90,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="js/app.js?v=2"></script>
+  <script type="module" src="js/app.js?v=4"></script>
 </body>
 </html>

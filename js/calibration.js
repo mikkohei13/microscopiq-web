@@ -31,6 +31,13 @@ export function createCalibrationController(options) {
   /** @type {number | null} source pixels per mm */
   let pxPerMm = null;
 
+  /** Left end of ~1 mm bar in normalized video-content coords (0–1). */
+  /** @type {{ nx: number, ny: number } | null} */
+  let scaleBarAnchor = null;
+  let scaleBarDragging = false;
+  /** @type {number | null} */
+  let scaleBarPointerId = null;
+
   let dragTarget = /** @type {'a' | 'b' | null} */ (null);
 
   function setPhase(p) {
@@ -72,11 +79,30 @@ export function createCalibrationController(options) {
       return;
     }
     pxPerMm = d / knownMm;
+    placeDefaultScaleBarAnchor();
     setPhase('calibrated');
+  }
+
+  function placeDefaultScaleBarAnchor() {
+    if (pxPerMm == null) return;
+    const vr = getVideoContentRect(container, video);
+    const len = mmToOverlayPixels(pxPerMm, 1, vr);
+    const margin = 16;
+    if (!vr.width || !vr.height || len < 4) {
+      scaleBarAnchor = { nx: 0.03, ny: 0.92 };
+      return;
+    }
+    const nxMax = Math.max(0, 1 - len / vr.width);
+    const nxLeft = clamp(margin / vr.width, 0, nxMax);
+    const nyBase = clamp((vr.height - margin) / vr.height, 0, 1);
+    scaleBarAnchor = { nx: nxLeft, ny: nyBase };
   }
 
   function clearCalibration() {
     pxPerMm = null;
+    scaleBarAnchor = null;
+    scaleBarDragging = false;
+    scaleBarPointerId = null;
     setPhase('inactive');
   }
 
@@ -90,6 +116,105 @@ export function createCalibrationController(options) {
 
   function getKnownMm() {
     return knownMm;
+  }
+
+  /**
+   * Normalized left baseline for the ~1 mm bar on exported images (matches overlay space).
+   * @returns {{ nx: number, ny: number } | null}
+   */
+  function getScaleBarAnchor() {
+    if (phase !== 'calibrated' || pxPerMm == null || !scaleBarAnchor) return null;
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) return null;
+    const barLen = pxPerMm * 1;
+    if (barLen < 4) return null;
+    const nxMax = Math.max(0, 1 - barLen / vw);
+    return {
+      nx: clamp(scaleBarAnchor.nx, 0, nxMax),
+      ny: clamp(scaleBarAnchor.ny, 0, 1),
+    };
+  }
+
+  function isScaleBarDragging() {
+    return scaleBarDragging;
+  }
+
+  /**
+   * @param {number} clientX
+   * @param {number} clientY
+   */
+  function hitTestScaleBar(clientX, clientY) {
+    if (phase !== 'calibrated' || pxPerMm == null || !scaleBarAnchor) return false;
+    const vr = getVideoContentRect(container, video);
+    const len = mmToOverlayPixels(pxPerMm, 1, vr);
+    if (len < 4 || !vr.width) return false;
+    const nxMax = Math.max(0, 1 - len / vr.width);
+    const nxLeft = clamp(scaleBarAnchor.nx, 0, nxMax);
+    const nyBase = clamp(scaleBarAnchor.ny, 0, 1);
+    const x0 = vr.left + nxLeft * vr.width;
+    const y = vr.top + nyBase * vr.height;
+    const x1 = x0 + len;
+    const slopY = 14;
+    const padX = 8;
+    if (clientX < x0 - padX || clientX > x1 + padX) return false;
+    if (clientY < y - slopY - 20 || clientY > y + slopY) return false;
+    return true;
+  }
+
+  /**
+   * @param {PointerEvent} e
+   * @returns {boolean} true if handled
+   */
+  function tryScaleBarPointerDown(e) {
+    if (phase !== 'calibrated' || pxPerMm == null || !scaleBarAnchor) return false;
+    if (!hitTestScaleBar(e.clientX, e.clientY)) return false;
+    scaleBarDragging = true;
+    scaleBarPointerId = e.pointerId;
+    try {
+      e.target.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    e.preventDefault();
+    return true;
+  }
+
+  /**
+   * @param {PointerEvent} e
+   * @returns {boolean} true if handled
+   */
+  function tryScaleBarPointerMove(e) {
+    if (!scaleBarDragging || e.pointerId !== scaleBarPointerId || pxPerMm == null) {
+      return false;
+    }
+    const vr = getVideoContentRect(container, video);
+    const len = mmToOverlayPixels(pxPerMm, 1, vr);
+    if (!vr.width || len < 4) return true;
+    const { nx, ny } = clientToNormalized(e.clientX, e.clientY, container, video);
+    const nxMax = Math.max(0, 1 - len / vr.width);
+    scaleBarAnchor = { nx: clamp(nx, 0, nxMax), ny: clamp(ny, 0, 1) };
+    e.preventDefault();
+    if (typeof onRedraw === 'function') onRedraw();
+    return true;
+  }
+
+  /**
+   * @param {PointerEvent} e
+   * @returns {boolean} true if handled
+   */
+  function tryScaleBarPointerUp(e) {
+    if (!scaleBarDragging || e.pointerId !== scaleBarPointerId) return false;
+    scaleBarDragging = false;
+    scaleBarPointerId = null;
+    try {
+      e.target.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    e.preventDefault();
+    if (typeof onRedraw === 'function') onRedraw();
+    return true;
   }
 
   /**
@@ -186,7 +311,7 @@ export function createCalibrationController(options) {
   }
 
   /**
-   * ~1 mm dual reference (white bar with black outline) at bottom-left of video content.
+   * ~1 mm dual reference (white bar with black outline) on video content.
    * @param {CanvasRenderingContext2D} ctx
    * @param {ReturnType<typeof getVideoContentRect>} vr
    * @param {number} pxPerMmVal
@@ -195,8 +320,17 @@ export function createCalibrationController(options) {
     const len = mmToOverlayPixels(pxPerMmVal, 1, vr);
     if (len < 4) return;
     const margin = 16;
-    const y = vr.top + vr.height - margin;
-    const x0 = vr.left + margin;
+    let nxLeft = scaleBarAnchor?.nx;
+    let nyBase = scaleBarAnchor?.ny;
+    if (nxLeft == null || nyBase == null) {
+      nxLeft = margin / Math.max(vr.width, 1);
+      nyBase = (vr.height - margin) / Math.max(vr.height, 1);
+    }
+    const nxMax = Math.max(0, 1 - len / Math.max(vr.width, 1e-6));
+    nxLeft = clamp(nxLeft, 0, nxMax);
+    nyBase = clamp(nyBase, 0, 1);
+    const y = vr.top + nyBase * vr.height;
+    const x0 = vr.left + nxLeft * vr.width;
     const x1 = x0 + len;
     ctx.save();
     ctx.lineWidth = 4;
@@ -225,6 +359,11 @@ export function createCalibrationController(options) {
     getPxPerMm,
     getPhase,
     getKnownMm,
+    getScaleBarAnchor,
+    isScaleBarDragging,
+    tryScaleBarPointerDown,
+    tryScaleBarPointerMove,
+    tryScaleBarPointerUp,
     getLine: () => ({ ...line }),
     onPointerDown,
     onPointerMove,

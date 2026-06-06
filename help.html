@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Microscopiq — Help</title>
+  <style>
+    body {
+      margin: 0 auto;
+      max-width: 40rem;
+      padding: 1.5rem;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      line-height: 1.5;
+      color: #111;
+      background: #fafafa;
+    }
+    h1 { font-size: 1.35rem; margin-top: 0; }
+    h2 { font-size: 1.05rem; margin-top: 1.5rem; }
+    code { font-size: 0.9em; background: #eee; padding: 0.1em 0.35em; border-radius: 4px; }
+    a { color: #2563eb; }
+  </style>
+</head>
+<body>
+  <h1>Microscopiq</h1>
+  <p>Browser-based microscope capture: live preview, scale calibration, on-screen measurements, and PNG export.</p>
+
+  <h2>Camera</h2>
+  <p>Use <strong>Start camera</strong> in the middle of the preview when the stream is off. There is no in-app stop; reload the page to reset the camera.</p>
+  <p>If the camera does not start, try unplugging the USB device, plugging it back in, reloading the page, and checking site permissions for the camera.</p>
+
+  <h2>Calibration and scale bar</h2>
+  <p><strong>Calibrate</strong> opens a dialog: enter the real length (in millimeters) matching the yellow line, then align that line on the specimen. Use <strong>Calibration done</strong> when finished, or <strong>Cancel calibration</strong> to abort.</p>
+  <p>After calibration, a <strong>~1 mm</strong> scale bar appears on the preview. You can <strong>drag</strong> it to a clearer position. <strong>Clear scale</strong> removes calibration and measurements.</p>
+
+  <h2>Measurements</h2>
+  <p>Measurements are only available after calibration. Drag on the image to draw a line; select a line to adjust endpoints. <strong>Clear</strong> removes all measurement lines; <strong>Delete selected</strong> removes the current selection.</p>
+
+  <h2>Capture</h2>
+  <p><strong>Capture</strong> saves a PNG of the current frame. <strong>Capture with measurements</strong> includes measurement overlays and the scale bar when calibrated.</p>
+  <p>Choose <strong>Burst</strong> mode for multiple frames with a set count and interval; press <strong>Space</strong> while capturing to cancel the rest of a burst.</p>
+
+  <h2>Keyboard shortcuts</h2>
+  <ul>
+    <li><code>Enter</code> — Capture</li>
+    <li><code>Shift</code> + <code>Enter</code> — Capture with measurements</li>
+    <li><code>Space</code> — Cancel burst (while a burst is running)</li>
+  </ul>
+
+  <p><a href="index.html">Back to app</a></p>
+</body>
+</html>

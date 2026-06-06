@@ -18,3 +18,8 @@ Open [http://localhost:8080](http://localhost:8080) in your browser.
 - Measurements are stored as normalized line segments so they stay aligned across resize/layout changes.
 - Capture uses `ImageCapture.takePhoto()` when available, with a canvas fallback from the video frame.
 - Export composes a final PNG in memory, optionally drawing a ~1 mm scale bar and measurement lines + labels, then saves via browser download flow.
+
+## Improvement ideas
+
+- When measurement lines overlap, the length indicator labels can also overlap. Make the labels move so that they remain close to the line they are associated with, but they don't overlap.
+- Ability to enter HEX code for the measurement line color, persisted in browser storage.

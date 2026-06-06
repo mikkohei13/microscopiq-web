@@ -14,17 +14,23 @@ import {
   timestampFilename,
   saveBlobToDirectory,
 } from './export.js';
+import { readBurstSettings, writeBurstSettings } from './settings.js';
 
 const previewArea = document.getElementById('preview-area');
 const video = document.getElementById('preview');
 const overlay = document.getElementById('overlay');
+const cameraIdleLayer = document.getElementById('camera-idle-layer');
+const cameraIdleHeadline = document.getElementById('camera-idle-headline');
+const cameraIdleDetail = document.getElementById('camera-idle-detail');
+const btnStartCenter = document.getElementById('btn-start-camera-center');
 const errorOverlay = document.getElementById('error-overlay');
 const captureFlash = document.getElementById('capture-flash');
 
-const btnStart = document.getElementById('btn-start-camera');
+const CAMERA_START_TIMEOUT_MS = 14000;
 const btnCalibrate = document.getElementById('btn-calibrate');
 const btnCalibrationDone = document.getElementById('btn-calibration-done');
 const btnCalibrationCancel = document.getElementById('btn-calibration-cancel');
+const btnClearCalibration = document.getElementById('btn-clear-calibration');
 const btnClearMeasurements = document.getElementById('btn-clear-measurements');
 const btnDeleteMeasurement = document.getElementById('btn-delete-measurement');
 const btnCapture = document.getElementById('btn-capture');
@@ -59,6 +65,117 @@ let cameraStarting = false;
 let burstCancelled = false;
 let burstInProgress = false;
 
+/** @type {string | null} */
+let lastCameraStartError = null;
+/** @type {string | null} */
+let lastCameraStartTech = null;
+
+/**
+ * @param {unknown} err
+ * @returns {{ user: string, tech: string | null }}
+ */
+function friendlyCameraStartError(err) {
+  const tech = describeError(err) || '';
+  const lower = tech.toLowerCase();
+  const msg =
+    err && typeof err === 'object' && 'message' in err
+      ? String(/** @type {{ message?: string }} */ (err).message)
+      : '';
+  if (
+    lower.includes('notallowederror') ||
+    lower.includes('permission denied') ||
+    lower.includes('permission')
+  ) {
+    return {
+      user: 'Camera access was denied. Allow the camera for this site in your browser settings, then try again.',
+      tech: tech || null,
+    };
+  }
+  if (lower.includes('notfounderror') || lower.includes('devices not found')) {
+    return {
+      user: 'No camera was found. Check that the USB camera is connected, then reload the page and try again.',
+      tech: tech || null,
+    };
+  }
+  if (msg && (msg.includes('too long') || msg.includes('Unplug'))) {
+    return { user: msg, tech: tech && tech !== msg ? tech : null };
+  }
+  return {
+    user: 'Camera did not start. Try unplugging the USB camera, plugging it back in, reloading this page, then tap Start camera again.',
+    tech: tech || null,
+  };
+}
+
+/**
+ * @param {HTMLVideoElement} videoEl
+ * @returns {Promise<import('./camera.js').CameraHandle>}
+ */
+function startCameraWithTimeout(videoEl) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const t = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(
+        new Error(
+          'The camera took too long to respond. Unplug the USB camera, plug it back in, reload this page, then try again.'
+        )
+      );
+    }, CAMERA_START_TIMEOUT_MS);
+    startCamera(videoEl)
+      .then((handle) => {
+        if (settled) {
+          stopCamera(handle);
+          return;
+        }
+        settled = true;
+        clearTimeout(t);
+        resolve(handle);
+      })
+      .catch((err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(t);
+        reject(err);
+      });
+  });
+}
+
+function updateCameraIdleLayer() {
+  if (!cameraIdleLayer || !btnStartCenter || !cameraIdleHeadline || !cameraIdleDetail) {
+    return;
+  }
+  if (cameraActive) {
+    cameraIdleLayer.classList.add('hidden');
+    return;
+  }
+  cameraIdleLayer.classList.remove('hidden');
+  if (cameraStarting) {
+    cameraIdleHeadline.textContent = 'Starting camera…';
+    cameraIdleDetail.classList.add('hidden');
+    cameraIdleDetail.textContent = '';
+    btnStartCenter.textContent = 'Starting…';
+    btnStartCenter.disabled = true;
+    return;
+  }
+  btnStartCenter.textContent = 'Start camera';
+  btnStartCenter.disabled = false;
+  if (lastCameraStartError) {
+    cameraIdleHeadline.textContent = lastCameraStartError;
+    if (lastCameraStartTech) {
+      cameraIdleDetail.textContent = lastCameraStartTech;
+      cameraIdleDetail.classList.remove('hidden');
+    } else {
+      cameraIdleDetail.textContent = '';
+      cameraIdleDetail.classList.add('hidden');
+    }
+  } else {
+    cameraIdleHeadline.textContent = 'Start the camera to begin.';
+    cameraIdleDetail.textContent = '';
+    cameraIdleDetail.classList.add('hidden');
+  }
+}
+
 function showError(msg) {
   errorOverlay.textContent = msg;
   errorOverlay.classList.remove('hidden');
@@ -76,6 +193,7 @@ function hideError() {
 function setCameraActive(active) {
   cameraActive = active;
   renderUiState();
+  updateCameraIdleLayer();
 }
 
 function flashCapture() {
@@ -106,6 +224,7 @@ const measurement = createMeasurementController({
   container: previewArea,
   video,
   getPxPerMm: () => calibration.getPxPerMm(),
+  isCalibrated: () => calibration.getPhase() === 'calibrated',
   onRedraw: redraw,
 });
 
@@ -135,16 +254,20 @@ function renderUiState() {
   btnCalibrationCancel.disabled = !canUseControls || !isAdjusting;
   btnCalibrate.disabled = !canUseControls || isAdjusting;
 
-  const shouldMeasureBeActive = canUseControls && !isAdjusting;
+  const isCalibrated = phase === 'calibrated';
+  btnClearCalibration.disabled =
+    !canUseControls || !isCalibrated || isAdjusting;
+
+  const shouldMeasureBeActive =
+    canUseControls && !isAdjusting && isCalibrated;
   measurement.setActive(shouldMeasureBeActive);
   overlay.classList.toggle('calibration-cursor', isAdjusting);
   overlay.classList.toggle('measure-cursor', shouldMeasureBeActive);
 
   btnClearMeasurements.disabled =
-    !canUseControls ||
-    (!measurement.hasLines() && !measurement.isActive());
+    !canUseControls || !isCalibrated || !measurement.hasLines();
   btnDeleteMeasurement.disabled =
-    !canUseControls || !measurement.hasSelection();
+    !canUseControls || !isCalibrated || !measurement.hasSelection();
 
   const canCapture = canUseControls && !burstInProgress;
   btnCapture.disabled = !canCapture;
@@ -157,26 +280,17 @@ function renderUiState() {
 
 setupOverlayResize(overlay, previewArea, video, redraw);
 
-btnStart.addEventListener('click', async () => {
-  if (cameraStarting) return;
-  if (cameraHandle?.stream) {
-    stopCamera(cameraHandle);
-    cameraHandle = null;
-    video.srcObject = null;
-    btnStart.textContent = 'Start camera';
-    setCameraActive(false);
-    // Camera stream characteristics can change between sessions, so
-    // calibration must be recomputed after each restart.
-    calibration.clearCalibration();
-    hideError();
-    return;
-  }
+async function tryStartCamera() {
+  if (cameraStarting || cameraActive) return;
   hideError();
+  lastCameraStartError = null;
+  lastCameraStartTech = null;
   cameraStarting = true;
-  btnStart.disabled = true;
+  updateCameraIdleLayer();
   try {
-    cameraHandle = await startCamera(video);
-    btnStart.textContent = 'Stop camera';
+    cameraHandle = await startCameraWithTimeout(video);
+    lastCameraStartError = null;
+    lastCameraStartTech = null;
     setCameraActive(true);
     video.addEventListener(
       'loadeddata',
@@ -186,23 +300,26 @@ btnStart.addEventListener('click', async () => {
       { once: true }
     );
   } catch (e) {
-    showError(describeError(e) || 'Could not access camera');
+    const { user, tech } = friendlyCameraStartError(e);
+    lastCameraStartError = user;
+    lastCameraStartTech = tech;
+    cameraHandle = null;
+    video.srcObject = null;
     setCameraActive(false);
   } finally {
     cameraStarting = false;
-    btnStart.disabled = false;
+    updateCameraIdleLayer();
   }
+}
+
+btnStartCenter.addEventListener('click', () => {
+  void tryStartCamera();
 });
 
 btnCalibrate.addEventListener('click', () => {
-  if (!cameraHandle?.stream) {
-    showError('Start the camera first.');
-    return;
-  }
+  if (!cameraHandle?.stream) return;
   hideError();
-  calibrationMmInput.value = String(
-    Math.min(100, Math.max(1, parseInt(calibrationMmInput.value, 10) || 10))
-  );
+  calibrationMmInput.value = '';
   calibrationDialog.showModal();
 });
 
@@ -212,6 +329,10 @@ calibrationDialogCancel.addEventListener('click', () => {
 
 calibrationForm.addEventListener('submit', (e) => {
   e.preventDefault();
+  if (!calibrationForm.checkValidity()) {
+    calibrationForm.reportValidity();
+    return;
+  }
   const mm = parseInt(calibrationMmInput.value, 10);
   calibrationDialog.close();
   calibration.startAdjusting(mm);
@@ -226,6 +347,13 @@ btnCalibrationDone.addEventListener('click', () => {
 btnCalibrationCancel.addEventListener('click', () => {
   calibration.cancel();
   redraw();
+});
+
+btnClearCalibration.addEventListener('click', () => {
+  if (btnClearCalibration.disabled) return;
+  calibration.clearCalibration();
+  measurement.clear();
+  hideError();
 });
 
 btnClearMeasurements.addEventListener('click', () => {
@@ -252,16 +380,42 @@ function parseBurstOptions() {
   return { count, intervalMs: Math.round(intervalSec * 1000) };
 }
 
+function persistBurstFromInputs() {
+  const { count, intervalMs } = parseBurstOptions();
+  writeBurstSettings({
+    burstMode,
+    burstCount: count,
+    burstIntervalSec: intervalMs / 1000,
+  });
+  return { count, intervalMs };
+}
+
 let burstMode = false;
+
+function applyBurstSettingsFromStorage() {
+  const s = readBurstSettings();
+  burstMode = s.burstMode;
+  burstCountInput.value = String(s.burstCount);
+  burstIntervalInput.value = String(s.burstIntervalSec);
+  modeRadios.forEach((r) => {
+    r.checked = (r.value === 'burst' && burstMode) || (r.value === 'normal' && !burstMode);
+  });
+  burstControls.classList.toggle('hidden', !burstMode);
+}
+
+applyBurstSettingsFromStorage();
+persistBurstFromInputs();
 
 modeRadios.forEach((r) => {
   r.addEventListener('change', () => {
     burstMode = r.checked && r.value === 'burst';
     burstControls.classList.toggle('hidden', !burstMode);
+    persistBurstFromInputs();
   });
 });
 
-burstControls.classList.toggle('hidden', !burstMode);
+burstCountInput.addEventListener('change', persistBurstFromInputs);
+burstIntervalInput.addEventListener('change', persistBurstFromInputs);
 
 /**
  * @param {Blob} rawBlob
@@ -272,6 +426,7 @@ async function exportCapture(rawBlob, withMeasurements) {
   const finalBlob = await composePngWithScaleBar(rawBlob, px, {
     withMeasurements,
     measurements: withMeasurements ? measurement.getLines() : [],
+    scaleBarAnchor: calibration.getScaleBarAnchor(),
   });
   const name = timestampFilename();
   await saveBlobToDirectory(null, finalBlob, name);
@@ -285,7 +440,7 @@ async function doCapture(withMeasurements = false) {
   hideError();
 
   if (burstMode) {
-    const { count, intervalMs } = parseBurstOptions();
+    const { count, intervalMs } = persistBurstFromInputs();
     const measuredLines = withMeasurements ? measurement.getLines() : [];
     burstInProgress = true;
     burstCancelled = false;
@@ -301,6 +456,7 @@ async function doCapture(withMeasurements = false) {
           const finalBlob = await composePngWithScaleBar(blob, px, {
             withMeasurements,
             measurements: measuredLines,
+            scaleBarAnchor: calibration.getScaleBarAnchor(),
           });
           const base = timestampFilename().replace(/\.png$/i, '');
           const name = `${base}_${String(i + 1).padStart(2, '0')}.png`;
@@ -368,6 +524,8 @@ document.addEventListener('keydown', (e) => {
 overlay.addEventListener('pointerdown', (e) => {
   if (calibration.getPhase() === 'adjusting') {
     calibration.onPointerDown(e);
+  } else if (calibration.tryScaleBarPointerDown(e)) {
+    /* scale bar drag */
   } else if (measurement.isActive()) {
     measurement.onPointerDown(e);
     renderUiState();
@@ -376,6 +534,8 @@ overlay.addEventListener('pointerdown', (e) => {
 overlay.addEventListener('pointermove', (e) => {
   if (calibration.getPhase() === 'adjusting') {
     calibration.onPointerMove(e);
+  } else if (calibration.isScaleBarDragging()) {
+    calibration.tryScaleBarPointerMove(e);
   } else if (measurement.isActive()) {
     measurement.onPointerMove(e);
     renderUiState();
@@ -384,6 +544,8 @@ overlay.addEventListener('pointermove', (e) => {
 overlay.addEventListener('pointerup', (e) => {
   if (calibration.getPhase() === 'adjusting') {
     calibration.onPointerUp(e);
+  } else if (calibration.isScaleBarDragging()) {
+    calibration.tryScaleBarPointerUp(e);
   } else if (measurement.isActive()) {
     measurement.onPointerUp(e);
     renderUiState();
@@ -392,6 +554,8 @@ overlay.addEventListener('pointerup', (e) => {
 overlay.addEventListener('pointercancel', (e) => {
   if (calibration.getPhase() === 'adjusting') {
     calibration.onPointerUp(e);
+  } else if (calibration.isScaleBarDragging()) {
+    calibration.tryScaleBarPointerUp(e);
   } else if (measurement.isActive()) {
     measurement.onPointerUp(e);
     renderUiState();

@@ -1,0 +1,57 @@
+/**
+ * Persisted UI preferences (localStorage).
+ */
+
+const STORAGE_KEY = 'microscopiq.settings.v1';
+
+/** @typedef {{ burstMode: boolean, burstCount: number, burstIntervalSec: number }} BurstSettings */
+
+function clampCount(n) {
+  const x = Math.round(Number(n));
+  if (Number.isNaN(x)) return 5;
+  return Math.min(30, Math.max(1, x));
+}
+
+function clampIntervalSec(sec) {
+  const x = Number(sec);
+  if (Number.isNaN(x)) return 0.2;
+  return Math.min(1, Math.max(0.1, Math.round(x * 10) / 10));
+}
+
+/** @returns {BurstSettings} */
+export function defaultBurstSettings() {
+  return { burstMode: false, burstCount: 5, burstIntervalSec: 0.2 };
+}
+
+/** @returns {BurstSettings} */
+export function readBurstSettings() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultBurstSettings();
+    const o = JSON.parse(raw);
+    return {
+      burstMode: Boolean(o.burstMode),
+      burstCount: clampCount(o.burstCount),
+      burstIntervalSec: clampIntervalSec(o.burstIntervalSec),
+    };
+  } catch {
+    return defaultBurstSettings();
+  }
+}
+
+/** @param {BurstSettings} s */
+export function writeBurstSettings(s) {
+  try {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        burstMode: Boolean(s.burstMode),
+        burstCount: clampCount(s.burstCount),
+        burstIntervalSec: clampIntervalSec(s.burstIntervalSec),
+      })
+    );
+  } catch {
+    /* ignore quota / private mode */
+  }
+}

@@ -13,7 +13,7 @@ import {
  */
 
 export function createMeasurementController(options) {
-  const { container, video, getPxPerMm, onRedraw } = options;
+  const { container, video, getPxPerMm, isCalibrated, onRedraw } = options;
 
   /** @type {NormSegment[]} */
   let lines = [];
@@ -220,6 +220,9 @@ export function createMeasurementController(options) {
    * @param {CanvasRenderingContext2D} ctx
    */
   function draw(ctx) {
+    if (typeof isCalibrated === 'function' && !isCalibrated()) {
+      return;
+    }
     if (!active && lines.length === 0) return;
 
     const pxPerMm = typeof getPxPerMm === 'function' ? getPxPerMm() : null;
