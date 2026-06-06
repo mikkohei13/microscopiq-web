@@ -7,6 +7,7 @@ import {
   normDistanceToSourcePixels,
   normalizedToClientPixels,
 } from './overlay.js';
+import { computeMeasurementLabelPlacements } from './measurement-label-layout.js';
 
 /**
  * @typedef {{ nx1: number, ny1: number, nx2: number, ny2: number }} NormSegment
@@ -227,7 +228,7 @@ export function createMeasurementController(options) {
 
     const pxPerMm = typeof getPxPerMm === 'function' ? getPxPerMm() : null;
 
-    const drawSegment = (seg, isDraft, isSelected) => {
+    const drawSegmentStroke = (seg, isDraft, isSelected) => {
       const p1 = normalizedToClientPixels(seg.nx1, seg.ny1, container, video);
       const p2 = normalizedToClientPixels(seg.nx2, seg.ny2, container, video);
       ctx.save();
@@ -253,8 +254,29 @@ export function createMeasurementController(options) {
           ctx.stroke();
         }
       }
+      ctx.restore();
+    };
 
-      if (pxPerMm != null && pxPerMm > 0) {
+    for (let i = 0; i < lines.length; i += 1) {
+      drawSegmentStroke(lines[i], false, i === selectedIndex);
+    }
+    if (draft) {
+      drawSegmentStroke(draft, true, false);
+    }
+
+    if (pxPerMm != null && pxPerMm > 0) {
+      const font = '13px system-ui, sans-serif';
+      const pad = 4;
+      const boxH = 18;
+      ctx.font = font;
+      /** @type {{ midX: number, midY: number, vx: number, vy: number, tw: number, pad: number, boxH: number }[]} */
+      const labelItems = [];
+      /** @type {string[]} */
+      const labelTexts = [];
+
+      const pushLabel = (seg) => {
+        const p1 = normalizedToClientPixels(seg.nx1, seg.ny1, container, video);
+        const p2 = normalizedToClientPixels(seg.nx2, seg.ny2, container, video);
         const srcPx = normDistanceToSourcePixels(
           seg.nx1,
           seg.ny1,
@@ -263,26 +285,48 @@ export function createMeasurementController(options) {
           video
         );
         const mm = srcPx / pxPerMm;
-        const mx = (p1.x + p2.x) / 2;
-        const my = (p1.y + p2.y) / 2;
-        const label = `${mm.toFixed(2)} mm`;
-        ctx.font = '13px system-ui, sans-serif';
-        const pad = 4;
-        const tw = ctx.measureText(label).width;
-        ctx.fillStyle = 'rgba(0,0,0,0.65)';
-        ctx.fillRect(mx - tw / 2 - pad, my - 20, tw + pad * 2, 18);
-        ctx.fillStyle = '#b6f7c4';
-        ctx.textAlign = 'center';
-        ctx.fillText(label, mx, my - 7);
-      }
-      ctx.restore();
-    };
+        const text = `${mm.toFixed(2)} mm`;
+        const tw = ctx.measureText(text).width;
+        labelTexts.push(text);
+        labelItems.push({
+          midX: (p1.x + p2.x) / 2,
+          midY: (p1.y + p2.y) / 2,
+          vx: p2.x - p1.x,
+          vy: p2.y - p1.y,
+          tw,
+          pad,
+          boxH,
+        });
+      };
 
-    for (let i = 0; i < lines.length; i += 1) {
-      drawSegment(lines[i], false, i === selectedIndex);
-    }
-    if (draft) {
-      drawSegment(draft, true, false);
+      for (let i = 0; i < lines.length; i += 1) {
+        pushLabel(lines[i]);
+      }
+      if (draft) {
+        pushLabel(draft);
+      }
+
+      if (labelItems.length > 0) {
+        const placements = computeMeasurementLabelPlacements(labelItems);
+        ctx.save();
+        ctx.font = font;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (let i = 0; i < placements.length; i += 1) {
+          const pl = placements[i];
+          const text = labelTexts[i];
+          ctx.fillStyle = 'rgba(0,0,0,0.65)';
+          ctx.fillRect(
+            pl.cx - pl.boxW / 2,
+            pl.cy - boxH / 2,
+            pl.boxW,
+            boxH
+          );
+          ctx.fillStyle = '#b6f7c4';
+          ctx.fillText(text, pl.cx, pl.cy);
+        }
+        ctx.restore();
+      }
     }
   }
 

@@ -2,6 +2,8 @@
  * PNG export with optional ~1 mm scale bar; File System Access API + download fallback.
  */
 
+import { computeMeasurementLabelPlacements } from './measurement-label-layout.js';
+
 /**
  * @typedef {{ nx1: number, ny1: number, nx2: number, ny2: number }} NormSegment
  */
@@ -114,6 +116,7 @@ export async function composePngWithScaleBar(imageBlob, pxPerMm, options = {}) {
  * @param {number | null} pxPerMm
  */
 function drawMeasurementsOnCanvas(ctx, width, height, measurements, pxPerMm) {
+  const lineWidth = Math.max(2, Math.round(height / 600));
   for (const seg of measurements) {
     const x1 = seg.nx1 * width;
     const y1 = seg.ny1 * height;
@@ -121,35 +124,60 @@ function drawMeasurementsOnCanvas(ctx, width, height, measurements, pxPerMm) {
     const y2 = seg.ny2 * height;
     ctx.save();
     ctx.strokeStyle = '#4ade80';
-    ctx.lineWidth = Math.max(2, Math.round(height / 600));
+    ctx.lineWidth = lineWidth;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.stroke();
-
-    if (pxPerMm != null && pxPerMm > 0) {
-      const srcPx = Math.hypot((seg.nx2 - seg.nx1) * width, (seg.ny2 - seg.ny1) * height);
-      const mm = srcPx / pxPerMm;
-      const label = `${mm.toFixed(2)} mm`;
-      const mx = (x1 + x2) / 2;
-      const my = (y1 + y2) / 2;
-      const fontSize = Math.max(13, Math.round(height / 85));
-      const pad = Math.max(4, Math.round(fontSize * 0.28));
-      ctx.font = `${fontSize}px system-ui, sans-serif`;
-      const tw = ctx.measureText(label).width;
-      const boxW = tw + pad * 2;
-      const boxH = Math.round(fontSize * 1.35);
-      const boxX = mx - boxW / 2;
-      const boxY = my - boxH - Math.max(6, Math.round(fontSize * 0.2));
-      ctx.fillStyle = 'rgba(0,0,0,0.65)';
-      ctx.fillRect(boxX, boxY, boxW, boxH);
-      ctx.fillStyle = '#b6f7c4';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, mx, boxY + boxH / 2);
-    }
     ctx.restore();
   }
+
+  if (pxPerMm == null || pxPerMm <= 0 || measurements.length === 0) return;
+
+  const fontSize = Math.max(13, Math.round(height / 85));
+  const pad = Math.max(4, Math.round(fontSize * 0.28));
+  const boxH = Math.round(fontSize * 1.35);
+  const font = `${fontSize}px system-ui, sans-serif`;
+  ctx.save();
+  ctx.font = font;
+
+  /** @type {{ midX: number, midY: number, vx: number, vy: number, tw: number, pad: number, boxH: number }[]} */
+  const labelItems = [];
+  /** @type {string[]} */
+  const labelTexts = [];
+
+  for (const seg of measurements) {
+    const x1 = seg.nx1 * width;
+    const y1 = seg.ny1 * height;
+    const x2 = seg.nx2 * width;
+    const y2 = seg.ny2 * height;
+    const srcPx = Math.hypot((seg.nx2 - seg.nx1) * width, (seg.ny2 - seg.ny1) * height);
+    const mm = srcPx / pxPerMm;
+    const text = `${mm.toFixed(2)} mm`;
+    const tw = ctx.measureText(text).width;
+    labelTexts.push(text);
+    labelItems.push({
+      midX: (x1 + x2) / 2,
+      midY: (y1 + y2) / 2,
+      vx: x2 - x1,
+      vy: y2 - y1,
+      tw,
+      pad,
+      boxH,
+    });
+  }
+
+  const placements = computeMeasurementLabelPlacements(labelItems);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let i = 0; i < placements.length; i += 1) {
+    const pl = placements[i];
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(pl.cx - pl.boxW / 2, pl.cy - boxH / 2, pl.boxW, boxH);
+    ctx.fillStyle = '#b6f7c4';
+    ctx.fillText(labelTexts[i], pl.cx, pl.cy);
+  }
+  ctx.restore();
 }
 
 /**

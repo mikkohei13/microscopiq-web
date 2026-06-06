@@ -24,5 +24,6 @@ Open [http://localhost:8080](http://localhost:8080) in your browser.
 
 ## Improvement ideas
 
-- When measurement lines overlap, the length indicator labels can also overlap. Make the labels move so that they remain close to the line they are associated with, but they don't overlap.
+- Draw an area on the view, and submit that to an AI model to get identification for the species.
 - Ability to enter HEX code for the measurement line color, persisted in browser storage.
+- Allow adjusting units of measurement (mm, μm)
