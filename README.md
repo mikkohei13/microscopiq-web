@@ -1,6 +1,10 @@
 # microscopiq-web
 
-Microscopiq is a browser-based microscope capture tool. It streams your device camera, lets you calibrate image scale using a known distance, draw measurement lines on top of the live preview, and save PNG images either as plain captures or with measurement overlays.
+Microscopiq is a browser-based microscope capture tool: live camera preview, scale calibration, measurements on the preview, and PNG export (plain or with overlays).
+
+**Start camera** appears over the preview when the stream is off. There is no in-app stop; reload the page to reset the camera. **Calibrate** opens a dialog (known distance in mm, then align the yellow line). Measurements work only after calibration. **Clear scale** lives in that same dialog and removes calibration and measurements. *Clear measurements* removes all measurement lines; *Delete selected* removes the current selection. The on-screen ~1 mm scale bar can be dragged; exports use the same position.
+
+Single or **burst** capture; burst frame count and interval are stored in `localStorage`. **[help.html](help.html)** has a short usage summary.
 
 ## Run locally
 
@@ -12,12 +16,11 @@ Open [http://localhost:8080](http://localhost:8080) in your browser.
 
 ## How it works (technical overview)
 
-- Camera access uses `getUserMedia` with rear-camera preference and HD constraints.
-- The live stream is rendered in a `<video>` element, with a synchronized `<canvas>` overlay for calibration and measurement UI.
-- Calibration stores a `pxPerMm` value by mapping a user-adjusted line (in normalized overlay coordinates) to source video pixels.
-- Measurements are stored as normalized line segments so they stay aligned across resize/layout changes.
-- Capture uses `ImageCapture.takePhoto()` when available, with a canvas fallback from the video frame.
-- Export composes a final PNG in memory, optionally drawing a ~1 mm scale bar and measurement lines + labels, then saves via browser download flow.
+- Vanilla JS, no frameworks.
+- Camera: `getUserMedia` with constraint fallbacks, warmup on `<video>`, bounded startup timeout; optional `ImageCapture.takePhoto()` with a canvas fallback.
+- Preview: `<video>` plus a `<canvas>` overlay; calibration and measurements use coordinates normalized to the fitted video rectangle.
+- Calibration stores `pxPerMm` from a line in that space. A normalized anchor places the ~1 mm bar on overlay and in `composePngWithScaleBar`.
+- Export builds a PNG in memory (scale bar and optional measurement lines), then triggers a download.
 
 ## Improvement ideas
 

@@ -147,6 +147,7 @@ body {
   align-items: center;
   gap: 0.75rem 1rem;
   padding: 0.65rem 1rem;
+  font-size: 0.875rem;
   background: rgba(30, 30, 30, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -214,6 +215,7 @@ body {
 input[type="number"] {
   width: 4.5rem;
   padding: 0.25rem 0.35rem;
+  font-size: inherit;
   background: #111;
   border: 1px solid #444;
   color: #eee;
@@ -313,4 +315,9 @@ button.primary {
   gap: 0.5rem;
   margin-top: 1.25rem;
   justify-content: flex-end;
+}
+
+.label {
+  font-size: 0.875rem;
+  color: #bbb;
 }
