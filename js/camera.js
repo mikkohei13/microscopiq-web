@@ -140,13 +140,24 @@ export async function runBurst(handle, video, options) {
     if (isCancelled()) break;
     await onFrame(i, blob);
     if (i < count - 1 && !isCancelled()) {
-      await sleep(intervalMs);
+      await sleepCancellable(intervalMs, isCancelled);
     }
   }
 }
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Wait up to `ms`, returning as soon as `isCancelled()` is true. */
+async function sleepCancellable(ms, isCancelled) {
+  const chunkMs = 50;
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (isCancelled()) return;
+    const left = end - Date.now();
+    await sleep(Math.min(chunkMs, Math.max(0, left)));
+  }
 }
 
 /**

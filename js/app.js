@@ -37,6 +37,8 @@ const btnCapture = document.getElementById('btn-capture');
 const btnCaptureWithMeasurements = document.getElementById(
   'btn-capture-with-measurements'
 );
+const normalCaptureButtons = document.getElementById('normal-capture-buttons');
+const btnCancelBurst = document.getElementById('btn-cancel-burst');
 
 const burstControls = document.getElementById('burst-controls');
 const burstCountInput = document.getElementById('burst-count');
@@ -276,6 +278,10 @@ function renderUiState() {
   btnCapture.disabled = !canCapture;
   btnCaptureWithMeasurements.disabled = !canCapture;
 
+  normalCaptureButtons.classList.toggle('hidden', burstInProgress);
+  btnCancelBurst.classList.toggle('hidden', !burstInProgress);
+  btnCancelBurst.disabled = !canUseControls || !burstInProgress;
+
   kbdCapture.disabled = !canUseControls;
   kbdCaptureWithMeasurements.disabled = !canUseControls;
   kbdCancelBurst.disabled = !canUseControls || !burstInProgress;
@@ -376,9 +382,9 @@ function parseBurstOptions() {
   let count = parseInt(burstCountInput.value, 10);
   let intervalSec = parseFloat(burstIntervalInput.value);
   if (Number.isNaN(count)) count = 5;
-  if (Number.isNaN(intervalSec)) intervalSec = 0.2;
+  if (Number.isNaN(intervalSec)) intervalSec = 1;
   count = Math.min(30, Math.max(1, count));
-  intervalSec = Math.min(1, Math.max(0.1, intervalSec));
+  intervalSec = Math.round(Math.min(3, Math.max(1, intervalSec)) * 10) / 10;
   burstCountInput.value = String(count);
   burstIntervalInput.value = String(intervalSec);
   return { count, intervalMs: Math.round(intervalSec * 1000) };
@@ -501,8 +507,16 @@ kbdCaptureWithMeasurements.addEventListener('click', () => {
   void doCapture(true);
 });
 
-kbdCancelBurst.addEventListener('click', () => {
+function cancelBurstInFlight() {
   burstCancelled = true;
+}
+
+btnCancelBurst.addEventListener('click', () => {
+  cancelBurstInFlight();
+});
+
+kbdCancelBurst.addEventListener('click', () => {
+  cancelBurstInFlight();
 });
 
 document.addEventListener('keydown', (e) => {
@@ -520,7 +534,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.key === ' ') {
     if (burstInProgress) {
       e.preventDefault();
-      burstCancelled = true;
+      cancelBurstInFlight();
     }
   }
 });

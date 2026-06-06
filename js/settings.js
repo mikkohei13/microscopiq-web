@@ -14,13 +14,13 @@ function clampCount(n) {
 
 function clampIntervalSec(sec) {
   const x = Number(sec);
-  if (Number.isNaN(x)) return 0.2;
-  return Math.min(1, Math.max(0.1, Math.round(x * 10) / 10));
+  if (Number.isNaN(x)) return 1;
+  return Math.min(3, Math.max(1, Math.round(x * 10) / 10));
 }
 
 /** @returns {BurstSettings} */
 export function defaultBurstSettings() {
-  return { burstMode: false, burstCount: 5, burstIntervalSec: 0.2 };
+  return { burstMode: false, burstCount: 5, burstIntervalSec: 1 };
 }
 
 /** @returns {BurstSettings} */

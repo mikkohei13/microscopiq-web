@@ -21,29 +21,60 @@
   </style>
 </head>
 <body>
-  <h1>Microscopiq</h1>
-  <p>Browser-based microscope capture: live preview, scale calibration, on-screen measurements, and PNG export.</p>
+  <h1>Microscopiq v2.0</h1>
+
+  <p><a href="https://github.com/mikkohei13/microscopiq-web">GitHub</a></p>
+
+  <p>Kuvaa mikroskoopilla selaimessa: näet kuvan reaaliajassa, voit kalibroida mittakaavan, tehdä mittauksia ja tallentaa kuvia PNG-muodossa.</p>
+
+  <h2>Kamera</h2>
+  <p>Klikkaa <strong>Start camera</strong> käynnistääksesi kameran. Lataa sivu uudelleen pysäyttääksesi kameran.</p>
+  <p>Jos kamera ei käynnisty, irrota kameran johto, kytke se takaisin, lataa sivu uudelleen ja tarkista, että sivustolla on oikeus käyttää kameraa.</p>
+
+  <h2>Kalibrointi ja mittakaavajana</h2>
+  <p>Kalibroi mittakaava klikkaamalla <strong>Calibrate</strong>. Syötä jonkin kuvassa näkyvän vertailukohteen (esim. viivaimen) pituus millimetreissä ja sovita keltainen viiva siihen. Kannattaa käyttää mahdollisimman suurta vertailukohdetta, jotta kalibrointi olisi tarkka.</p>
+  <p>Kalibroinnin jälkeen esikatselussa näkyy <strong>1 mm</strong> mittakaavajana. Voit raahata sen haluamaasi kohtaan. Avaa <strong>Calibrate</strong> uudelleen, jos haluat muuttaa tai nollata kalibroinnin.</p>
+  
+  <h2>Mittaukset</h2>
+  <p>Mittaustyökalut tulevat käyttöön kalibroinnin jälkeen. Piirrä mittausviiva hiirellä kuvan päälle. Valitsemalla viivan voit säätää sen päätepisteitä. <strong>Clear</strong> poistaa kaikki mittausviivat kerralla ja <strong>Delete selected</strong> vain valitun viivan.</p>
+  
+  <h2>Kuvan tallennus</h2>
+  <p>Tallenna kuva PNG-tiedostona klikkaamalla <strong>Capture</strong>. Jos kalibrointi on käytössä, <strong>Capture with measurements</strong> tallentaa myös mittausviivat ja mittakaavajanan.</p>
+  <p><strong>Burst</strong>-tilassa voit ottaa useita kuvia peräkkäin ja määrittää kuvien lukumäärä ja väliajan. Keskeytä sarjakuvaus painamalla <strong>Cancel burst</strong> tai <strong>välilyönti</strong>-näppäintä.</p>
+  
+  
+  <h2>Pikanäppäimet</h2>
+  <ul>
+    <li><code>Enter</code> — Ota kuva</li>
+    <li><code>Shift</code> + <code>Enter</code> — Ota kuva mittauksineen</li>
+    <li><code>Välilyönti</code> — Keskeytä sarjakuvaus</li>
+  </ul>
+  <p><a href="index.html">Takaisin sovellukseen</a></p>
+
+  <hr>
+
+  <p>Capture microscope images in your browser with live preview, scale calibration, on-screen measurements, and PNG export.</p>
 
   <h2>Camera</h2>
-  <p>Use <strong>Start camera</strong> in the middle of the preview when the stream is off. There is no in-app stop; reload the page to reset the camera.</p>
-  <p>If the camera does not start, try unplugging the USB device, plugging it back in, reloading the page, and checking site permissions for the camera.</p>
+  <p>Click <strong>Start camera</strong> to start the camera. Reload the page to stop the camera.</p>
+  <p>If the camera does not start, unplug the USB device, plug it back in, reload the page, and check the site’s camera permissions.</p>
 
   <h2>Calibration and scale bar</h2>
-  <p><strong>Calibrate</strong> opens a dialog: enter the real length (in millimeters) matching the yellow line, then align that line on the specimen. Use <strong>Calibration done</strong> when finished, or <strong>Cancel calibration</strong> to abort.</p>
-  <p>After calibration, a <strong>~1 mm</strong> scale bar appears on the preview. You can <strong>drag</strong> it to a clearer position. Open <strong>Calibrate</strong> and use <strong>Clear scale</strong> in that dialog to remove calibration and measurements.</p>
+  <p>Click <strong>Calibrate</strong> to open a dialog. Enter the length, in millimeters, of a visible reference object, such as a ruler. Then align the yellow line with that object. Preferably use the largest reference object that fits the image, so the calibration is accurate.</p>
+  <p>After calibration, a <strong>~1 mm</strong> scale bar appears in the preview. Drag it to a better position. Open <strong>Calibrate</strong> again to adjust or clear the calibration.</p>
 
   <h2>Measurements</h2>
-  <p>Measurements are only available after calibration. Drag on the image to draw a line; select a line to adjust endpoints. <strong>Clear</strong> removes all measurement lines; <strong>Delete selected</strong> removes the current selection.</p>
+  <p>Measurements are available after calibration. Drag on the image to draw a line. Select a line to adjust its endpoints. Click <strong>Clear</strong> to remove all measurement lines, or <strong>Delete selected</strong> to remove only the selected line.</p>
 
   <h2>Capture</h2>
-  <p><strong>Capture</strong> saves a PNG of the current frame. <strong>Capture with measurements</strong> includes measurement overlays and the scale bar when calibrated.</p>
-  <p>Choose <strong>Burst</strong> mode for multiple frames with a set count and interval; press <strong>Space</strong> while capturing to cancel the rest of a burst.</p>
+  <p>Click <strong>Capture</strong> to save a PNG of the current frame. Click <strong>Capture with measurements</strong> to include measurement overlays and the scale bar when calibration is active.</p>
+  <p>Choose <strong>Burst</strong> mode to capture multiple frames with a set count and interval. Click <strong>Cancel burst</strong> or press <strong>Space</strong> during capture to cancel the rest of the burst.</p>
 
   <h2>Keyboard shortcuts</h2>
   <ul>
     <li><code>Enter</code> — Capture</li>
     <li><code>Shift</code> + <code>Enter</code> — Capture with measurements</li>
-    <li><code>Space</code> — Cancel burst (while a burst is running)</li>
+    <li><code>Space</code> — Cancel burst while a burst is running</li>
   </ul>
 
   <p><a href="index.html">Back to app</a></p>

@@ -161,6 +161,17 @@ body {
   gap: 0.5rem;
 }
 
+.capture-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-cancel-burst {
+  color: #f87171;
+}
+
 .mode-row {
   gap: 0;
 }
