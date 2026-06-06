@@ -223,6 +223,28 @@ body {
   font-size: 0.875rem;
 }
 
+.focus-stack-controls {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.focus-stack-status {
+  font-size: 0.82rem;
+  color: #ccc;
+  max-width: 26rem;
+  line-height: 1.35;
+}
+
+.focus-stack-progress {
+  font-size: 0.82rem;
+  color: #93c5fd;
+}
+
+.focus-stack-progress.hidden {
+  display: none;
+}
+
 input[type="number"] {
   width: 4.5rem;
   padding: 0.25rem 0.35rem;

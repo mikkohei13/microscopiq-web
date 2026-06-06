@@ -45,10 +45,20 @@
           <input type="radio" name="capture-mode" value="burst" />
           <span>Burst</span>
         </label>
+        <label class="segmented">
+          <input type="radio" name="capture-mode" value="focusStack" />
+          <span>Focus stack</span>
+        </label>
       </div>
       <div class="control-group burst-controls hidden" id="burst-controls">
         <label>Frames <input type="number" id="burst-count" min="1" max="30" value="5" /></label>
         <label>Interval (s) <input type="number" id="burst-interval" min="1" max="3" step="0.1" value="1" /></label>
+      </div>
+      <div class="control-group focus-stack-controls hidden" id="focus-stack-controls">
+        <span id="focus-stack-status" class="focus-stack-status">0 / 15 frames (need 3–15)</span>
+        <button type="button" id="btn-focus-stack-finish" disabled>Finish &amp; stack</button>
+        <button type="button" id="btn-focus-stack-discard" disabled>Discard frames</button>
+        <span id="focus-stack-progress" class="focus-stack-progress hidden" aria-live="polite"></span>
       </div>
       <div class="control-group">
         <button type="button" id="btn-calibrate">Calibrate</button>
@@ -59,6 +69,7 @@
         <span class="label">Measurements:</span>
         <button type="button" id="btn-delete-measurement" disabled>Delete selected</button>
         <button type="button" id="btn-clear-measurements" disabled>Clear all</button>
+        <button type="button" id="btn-relative-mode" disabled>Relative mode</button>
       </div>
       <div class="control-group">
         <a class="help-link" href="help.html" target="_blank" rel="noopener noreferrer">Help</a>
@@ -100,6 +111,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="js/app.js?v=4"></script>
+  <script type="module" src="js/app.js?v=6"></script>
 </body>
 </html>

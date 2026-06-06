@@ -2,7 +2,7 @@
 
 Microscopiq is a browser-based microscope capture tool: live camera preview, scale calibration, measurements on the preview, and PNG export (plain or with overlays).
 
-**Start camera** appears over the preview when the stream is off. There is no in-app stop; reload the page to reset the camera. **Calibrate** opens a dialog (known distance in mm, then align the yellow line). Measurements work only after calibration. **Clear scale** lives in that same dialog and removes calibration and measurements. *Clear measurements* removes all measurement lines; *Delete selected* removes the current selection. The on-screen ~1 mm scale bar can be dragged; exports use the same position.
+**Start camera** appears over the preview when the stream is off. There is no in-app stop; reload the page to reset the camera. **Calibrate** opens a dialog (known distance in mm, then align the yellow line). Measurements work only after calibration. **Clear scale** lives in that same dialog and removes calibration and measurements. **Clear all** removes every measurement line; **Delete selected** removes the current selection. **Relative mode** (enabled when a line is selected) shows lengths as ratios to that line: the reference is `1` in orange; others are decimals without “mm”. **Absolute** restores millimetre labels. PNG export with measurements matches the on-screen labels, including relative mode. The on-screen ~1 mm scale bar can be dragged; exports use the same position.
 
 Single or **burst** capture; burst frame count and interval are stored in `localStorage`. **[help.html](help.html)** has a short usage summary.
 

@@ -4,7 +4,10 @@
 
 const STORAGE_KEY = 'microscopiq.settings.v1';
 
-/** @typedef {{ burstMode: boolean, burstCount: number, burstIntervalSec: number }} BurstSettings */
+/**
+ * @typedef {'single' | 'burst' | 'focusStack'} CaptureMode
+ * @typedef {{ captureMode: CaptureMode, burstCount: number, burstIntervalSec: number }} BurstSettings
+ */
 
 function clampCount(n) {
   const x = Math.round(Number(n));
@@ -20,7 +23,7 @@ function clampIntervalSec(sec) {
 
 /** @returns {BurstSettings} */
 export function defaultBurstSettings() {
-  return { burstMode: false, burstCount: 5, burstIntervalSec: 1 };
+  return { captureMode: 'single', burstCount: 5, burstIntervalSec: 1 };
 }
 
 /** @returns {BurstSettings} */
@@ -29,8 +32,15 @@ export function readBurstSettings() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaultBurstSettings();
     const o = JSON.parse(raw);
+    /** @type {CaptureMode} */
+    let captureMode = 'single';
+    if (o.captureMode === 'burst' || o.captureMode === 'focusStack') {
+      captureMode = o.captureMode;
+    } else if (o.burstMode === true) {
+      captureMode = 'burst';
+    }
     return {
-      burstMode: Boolean(o.burstMode),
+      captureMode,
       burstCount: clampCount(o.burstCount),
       burstIntervalSec: clampIntervalSec(o.burstIntervalSec),
     };
@@ -45,8 +55,8 @@ export function writeBurstSettings(s) {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        v: 1,
-        burstMode: Boolean(s.burstMode),
+        v: 2,
+        captureMode: s.captureMode,
         burstCount: clampCount(s.burstCount),
         burstIntervalSec: clampIntervalSec(s.burstIntervalSec),
       })

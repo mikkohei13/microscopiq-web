@@ -15,6 +15,7 @@ import {
   saveBlobToDirectory,
 } from './export.js';
 import { readBurstSettings, writeBurstSettings } from './settings.js';
+import { runFocusStackInWorker } from './focus-stack.js';
 
 const previewArea = document.getElementById('preview-area');
 const video = document.getElementById('preview');
@@ -32,6 +33,7 @@ const btnCalibrationDone = document.getElementById('btn-calibration-done');
 const btnCalibrationCancel = document.getElementById('btn-calibration-cancel');
 const btnClearCalibration = document.getElementById('btn-clear-calibration');
 const btnClearMeasurements = document.getElementById('btn-clear-measurements');
+const btnRelativeMode = document.getElementById('btn-relative-mode');
 const btnDeleteMeasurement = document.getElementById('btn-delete-measurement');
 const btnCapture = document.getElementById('btn-capture');
 const btnCaptureWithMeasurements = document.getElementById(
@@ -43,8 +45,16 @@ const btnCancelBurst = document.getElementById('btn-cancel-burst');
 const burstControls = document.getElementById('burst-controls');
 const burstCountInput = document.getElementById('burst-count');
 const burstIntervalInput = document.getElementById('burst-interval');
+const focusStackControls = document.getElementById('focus-stack-controls');
+const focusStackStatus = document.getElementById('focus-stack-status');
+const btnFocusStackFinish = document.getElementById('btn-focus-stack-finish');
+const btnFocusStackDiscard = document.getElementById('btn-focus-stack-discard');
+const focusStackProgress = document.getElementById('focus-stack-progress');
 const modeRadios = document.querySelectorAll('input[name="capture-mode"]');
 const modeRow = document.querySelector('.mode-row');
+
+const MIN_FOCUS_FRAMES = 3;
+const MAX_FOCUS_FRAMES = 15;
 
 const calibrationDialog = document.getElementById('calibration-dialog');
 const calibrationForm = document.getElementById('calibration-form');
@@ -66,6 +76,12 @@ let cameraActive = false;
 let cameraStarting = false;
 let burstCancelled = false;
 let burstInProgress = false;
+
+/** @type {'single' | 'burst' | 'focusStack'} */
+let captureMode = 'single';
+/** @type {Blob[]} */
+let focusStackFrames = [];
+let focusStackProcessing = false;
 
 /** @type {string | null} */
 let lastCameraStartError = null;
@@ -235,6 +251,19 @@ function onCalibrationStateChange() {
   redraw();
 }
 
+function updateFocusStackStatusUi() {
+  if (!focusStackStatus || captureMode !== 'focusStack') return;
+  const n = focusStackFrames.length;
+  focusStackStatus.textContent = `${n} / ${MAX_FOCUS_FRAMES} frames (need ${MIN_FOCUS_FRAMES}–${MAX_FOCUS_FRAMES}; capture between focus tweaks)`;
+  if (btnFocusStackFinish) {
+    btnFocusStackFinish.disabled =
+      n < MIN_FOCUS_FRAMES || focusStackProcessing;
+  }
+  if (btnFocusStackDiscard) {
+    btnFocusStackDiscard.disabled = n === 0 || focusStackProcessing;
+  }
+}
+
 function renderUiState() {
   const phase = calibration.getPhase();
   const isAdjusting = phase === 'adjusting';
@@ -247,8 +276,13 @@ function renderUiState() {
     modeRow.classList.toggle('is-disabled', !canUseControls);
     modeRow.setAttribute('aria-disabled', canUseControls ? 'false' : 'true');
   }
-  burstCountInput.disabled = !canUseControls;
-  burstIntervalInput.disabled = !canUseControls;
+  burstCountInput.disabled = !canUseControls || captureMode !== 'burst';
+  burstIntervalInput.disabled = !canUseControls || captureMode !== 'burst';
+  burstControls.classList.toggle('hidden', captureMode !== 'burst');
+  if (focusStackControls) {
+    focusStackControls.classList.toggle('hidden', captureMode !== 'focusStack');
+  }
+  updateFocusStackStatusUi();
 
   btnCalibrationDone.classList.toggle('hidden', phase !== 'adjusting');
   btnCalibrationCancel.classList.toggle('hidden', phase !== 'adjusting');
@@ -271,19 +305,34 @@ function renderUiState() {
 
   btnClearMeasurements.disabled =
     !canUseControls || !isCalibrated || !measurement.hasLines();
+  const relativeOn = measurement.isRelativeMode();
+  btnRelativeMode.disabled =
+    !canUseControls ||
+    !isCalibrated ||
+    (!relativeOn && !measurement.hasSelection());
+  btnRelativeMode.textContent = relativeOn ? 'Absolute' : 'Relative mode';
   btnDeleteMeasurement.disabled =
     !canUseControls || !isCalibrated || !measurement.hasSelection();
 
-  const canCapture = canUseControls && !burstInProgress;
+  const canCapture =
+    canUseControls &&
+    !burstInProgress &&
+    !focusStackProcessing &&
+    (captureMode !== 'focusStack' || focusStackFrames.length < MAX_FOCUS_FRAMES);
   btnCapture.disabled = !canCapture;
-  btnCaptureWithMeasurements.disabled = !canCapture;
+  btnCaptureWithMeasurements.disabled =
+    !canCapture || captureMode === 'focusStack';
 
-  normalCaptureButtons.classList.toggle('hidden', burstInProgress);
+  normalCaptureButtons.classList.toggle(
+    'hidden',
+    burstInProgress || focusStackProcessing
+  );
   btnCancelBurst.classList.toggle('hidden', !burstInProgress);
   btnCancelBurst.disabled = !canUseControls || !burstInProgress;
 
-  kbdCapture.disabled = !canUseControls;
-  kbdCaptureWithMeasurements.disabled = !canUseControls;
+  kbdCapture.disabled = !canCapture;
+  kbdCaptureWithMeasurements.disabled =
+    !canCapture || captureMode === 'focusStack';
   kbdCancelBurst.disabled = !canUseControls || !burstInProgress;
 }
 
@@ -378,6 +427,12 @@ btnDeleteMeasurement.addEventListener('click', () => {
   }
 });
 
+btnRelativeMode.addEventListener('click', () => {
+  if (btnRelativeMode.disabled) return;
+  measurement.setRelativeMode(!measurement.isRelativeMode());
+  renderUiState();
+});
+
 function parseBurstOptions() {
   let count = parseInt(burstCountInput.value, 10);
   let intervalSec = parseFloat(burstIntervalInput.value);
@@ -390,53 +445,80 @@ function parseBurstOptions() {
   return { count, intervalMs: Math.round(intervalSec * 1000) };
 }
 
-function persistBurstFromInputs() {
+function persistCaptureFromInputs() {
   const { count, intervalMs } = parseBurstOptions();
   writeBurstSettings({
-    burstMode,
+    captureMode,
     burstCount: count,
     burstIntervalSec: intervalMs / 1000,
   });
   return { count, intervalMs };
 }
 
-let burstMode = false;
-
-function applyBurstSettingsFromStorage() {
+function applyCaptureSettingsFromStorage() {
   const s = readBurstSettings();
-  burstMode = s.burstMode;
+  captureMode = s.captureMode;
   burstCountInput.value = String(s.burstCount);
   burstIntervalInput.value = String(s.burstIntervalSec);
-  modeRadios.forEach((r) => {
-    r.checked = (r.value === 'burst' && burstMode) || (r.value === 'normal' && !burstMode);
+  modeRadios.forEach((radio) => {
+    const v = radio.value;
+    radio.checked =
+      (v === 'normal' && captureMode === 'single') ||
+      (v === 'burst' && captureMode === 'burst') ||
+      (v === 'focusStack' && captureMode === 'focusStack');
   });
-  burstControls.classList.toggle('hidden', !burstMode);
+  burstControls.classList.toggle('hidden', captureMode !== 'burst');
+  if (focusStackControls) {
+    focusStackControls.classList.toggle('hidden', captureMode !== 'focusStack');
+  }
 }
 
-applyBurstSettingsFromStorage();
-persistBurstFromInputs();
+applyCaptureSettingsFromStorage();
+persistCaptureFromInputs();
 
 modeRadios.forEach((r) => {
   r.addEventListener('change', () => {
-    burstMode = r.checked && r.value === 'burst';
-    burstControls.classList.toggle('hidden', !burstMode);
-    persistBurstFromInputs();
+    if (!r.checked) return;
+    const prev = captureMode;
+    if (r.value === 'normal') captureMode = 'single';
+    else if (r.value === 'burst') captureMode = 'burst';
+    else captureMode = 'focusStack';
+    if (prev === 'focusStack' && captureMode !== 'focusStack') {
+      focusStackFrames = [];
+    }
+    burstControls.classList.toggle('hidden', captureMode !== 'burst');
+    if (focusStackControls) {
+      focusStackControls.classList.toggle('hidden', captureMode !== 'focusStack');
+    }
+    persistCaptureFromInputs();
+    updateFocusStackStatusUi();
+    renderUiState();
   });
 });
 
-burstCountInput.addEventListener('change', persistBurstFromInputs);
-burstIntervalInput.addEventListener('change', persistBurstFromInputs);
+burstCountInput.addEventListener('change', persistCaptureFromInputs);
+burstIntervalInput.addEventListener('change', persistCaptureFromInputs);
 
 /**
  * @param {Blob} rawBlob
  * @param {boolean} withMeasurements
  */
+function measurementRelativeForExport() {
+  if (!measurement.isRelativeMode()) return null;
+  const idx = measurement.getSelectedIndex();
+  if (idx < 0) return null;
+  return { selectedIndex: idx };
+}
+
 async function exportCapture(rawBlob, withMeasurements) {
   const px = calibration.getPxPerMm();
   const finalBlob = await composePngWithScaleBar(rawBlob, px, {
     withMeasurements,
     measurements: withMeasurements ? measurement.getLines() : [],
     scaleBarAnchor: calibration.getScaleBarAnchor(),
+    measurementRelative: withMeasurements
+      ? measurementRelativeForExport()
+      : null,
   });
   const name = timestampFilename();
   await saveBlobToDirectory(null, finalBlob, name);
@@ -446,12 +528,30 @@ async function exportCapture(rawBlob, withMeasurements) {
  * @param {boolean} withMeasurements
  */
 async function doCapture(withMeasurements = false) {
-  if (!cameraHandle?.stream || burstInProgress) return;
+  if (!cameraHandle?.stream || burstInProgress || focusStackProcessing) return;
   hideError();
 
-  if (burstMode) {
-    const { count, intervalMs } = persistBurstFromInputs();
+  if (captureMode === 'focusStack') {
+    if (withMeasurements) return;
+    if (focusStackFrames.length >= MAX_FOCUS_FRAMES) return;
+    try {
+      flashCapture();
+      const blob = await captureStill(cameraHandle, video);
+      focusStackFrames.push(blob);
+      updateFocusStackStatusUi();
+      renderUiState();
+    } catch (e) {
+      showError(describeError(e) || 'Capture failed');
+    }
+    return;
+  }
+
+  if (captureMode === 'burst') {
+    const { count, intervalMs } = persistCaptureFromInputs();
     const measuredLines = withMeasurements ? measurement.getLines() : [];
+    const burstRelative = withMeasurements
+      ? measurementRelativeForExport()
+      : null;
     burstInProgress = true;
     burstCancelled = false;
     renderUiState();
@@ -467,6 +567,7 @@ async function doCapture(withMeasurements = false) {
             withMeasurements,
             measurements: measuredLines,
             scaleBarAnchor: calibration.getScaleBarAnchor(),
+            measurementRelative: burstRelative,
           });
           const base = timestampFilename().replace(/\.png$/i, '');
           const name = `${base}_${String(i + 1).padStart(2, '0')}.png`;
@@ -518,6 +619,61 @@ btnCancelBurst.addEventListener('click', () => {
 kbdCancelBurst.addEventListener('click', () => {
   cancelBurstInFlight();
 });
+
+async function finishFocusStack() {
+  if (
+    !btnFocusStackFinish ||
+    btnFocusStackFinish.disabled ||
+    focusStackFrames.length < MIN_FOCUS_FRAMES
+  ) {
+    return;
+  }
+  hideError();
+  focusStackProcessing = true;
+  if (focusStackProgress) {
+    focusStackProgress.classList.remove('hidden');
+    focusStackProgress.textContent = '';
+  }
+  renderUiState();
+  try {
+    const stacked = await runFocusStackInWorker(focusStackFrames, (phase) => {
+      if (!focusStackProgress) return;
+      const labels = {
+        decode: 'Decoding…',
+        align: 'Aligning…',
+        fuse: 'Blending sharp regions…',
+        done: 'Saving…',
+      };
+      focusStackProgress.textContent = labels[phase] || phase;
+    });
+    await exportCapture(stacked, false);
+    focusStackFrames = [];
+    updateFocusStackStatusUi();
+  } catch (e) {
+    showError(describeError(e) || 'Focus stack failed');
+  } finally {
+    focusStackProcessing = false;
+    if (focusStackProgress) {
+      focusStackProgress.classList.add('hidden');
+      focusStackProgress.textContent = '';
+    }
+    renderUiState();
+  }
+}
+
+if (btnFocusStackFinish) {
+  btnFocusStackFinish.addEventListener('click', () => {
+    void finishFocusStack();
+  });
+}
+if (btnFocusStackDiscard) {
+  btnFocusStackDiscard.addEventListener('click', () => {
+    if (btnFocusStackDiscard.disabled) return;
+    focusStackFrames = [];
+    updateFocusStackStatusUi();
+    renderUiState();
+  });
+}
 
 document.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {

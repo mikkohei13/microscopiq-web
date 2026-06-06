@@ -71,7 +71,7 @@ function clamp(v, min, max) {
 /**
  * @param {Blob} imageBlob
  * @param {number | null} pxPerMm Source pixels per mm.
- * @param {{ withMeasurements?: boolean, measurements?: NormSegment[], scaleBarAnchor?: { nx: number, ny: number } | null }} [options]
+ * @param {{ withMeasurements?: boolean, measurements?: NormSegment[], scaleBarAnchor?: { nx: number, ny: number } | null, measurementRelative?: { selectedIndex: number } | null }} [options]
  * @returns {Promise<Blob>}
  */
 export async function composePngWithScaleBar(imageBlob, pxPerMm, options = {}) {
@@ -79,6 +79,7 @@ export async function composePngWithScaleBar(imageBlob, pxPerMm, options = {}) {
     withMeasurements = false,
     measurements = [],
     scaleBarAnchor = null,
+    measurementRelative = null,
   } = options;
   const bitmap = await createImageBitmap(imageBlob);
   const width = bitmap.width;
@@ -94,7 +95,7 @@ export async function composePngWithScaleBar(imageBlob, pxPerMm, options = {}) {
     drawScaleBarOnCanvas(ctx, width, height, pxPerMm, scaleBarAnchor);
   }
   if (withMeasurements && measurements.length > 0) {
-    drawMeasurementsOnCanvas(ctx, width, height, measurements, pxPerMm);
+    drawMeasurementsOnCanvas(ctx, width, height, measurements, pxPerMm, measurementRelative);
   }
   return new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -114,25 +115,42 @@ export async function composePngWithScaleBar(imageBlob, pxPerMm, options = {}) {
  * @param {number} height
  * @param {NormSegment[]} measurements
  * @param {number | null} pxPerMm
+ * @param {{ selectedIndex: number } | null | undefined} measurementRelative
  */
-function drawMeasurementsOnCanvas(ctx, width, height, measurements, pxPerMm) {
+function drawMeasurementsOnCanvas(
+  ctx,
+  width,
+  height,
+  measurements,
+  pxPerMm,
+  measurementRelative
+) {
+  if (pxPerMm == null || pxPerMm <= 0 || measurements.length === 0) return;
+
+  const refIdx =
+    measurementRelative &&
+    typeof measurementRelative.selectedIndex === 'number' &&
+    measurementRelative.selectedIndex >= 0 &&
+    measurementRelative.selectedIndex < measurements.length
+      ? measurementRelative.selectedIndex
+      : -1;
+
   const lineWidth = Math.max(2, Math.round(height / 600));
-  for (const seg of measurements) {
+  measurements.forEach((seg, lineIndex) => {
     const x1 = seg.nx1 * width;
     const y1 = seg.ny1 * height;
     const x2 = seg.nx2 * width;
     const y2 = seg.ny2 * height;
+    const isRef = refIdx >= 0 && lineIndex === refIdx;
     ctx.save();
-    ctx.strokeStyle = '#4ade80';
-    ctx.lineWidth = lineWidth;
+    ctx.strokeStyle = isRef ? '#f97316' : '#4ade80';
+    ctx.lineWidth = isRef ? Math.max(3, lineWidth) : lineWidth;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.stroke();
     ctx.restore();
-  }
-
-  if (pxPerMm == null || pxPerMm <= 0 || measurements.length === 0) return;
+  });
 
   const fontSize = Math.max(13, Math.round(height / 85));
   const pad = Math.max(4, Math.round(fontSize * 0.28));
@@ -145,17 +163,35 @@ function drawMeasurementsOnCanvas(ctx, width, height, measurements, pxPerMm) {
   const labelItems = [];
   /** @type {string[]} */
   const labelTexts = [];
+  /** @type {boolean[]} */
+  const labelIsRef = [];
 
-  for (const seg of measurements) {
+  function segMm(seg) {
+    const srcPx = Math.hypot(
+      (seg.nx2 - seg.nx1) * width,
+      (seg.ny2 - seg.ny1) * height
+    );
+    return srcPx / pxPerMm;
+  }
+
+  const refMm = refIdx >= 0 ? segMm(measurements[refIdx]) : 0;
+
+  measurements.forEach((seg, lineIndex) => {
     const x1 = seg.nx1 * width;
     const y1 = seg.ny1 * height;
     const x2 = seg.nx2 * width;
     const y2 = seg.ny2 * height;
-    const srcPx = Math.hypot((seg.nx2 - seg.nx1) * width, (seg.ny2 - seg.ny1) * height);
-    const mm = srcPx / pxPerMm;
-    const text = `${mm.toFixed(2)} mm`;
+    const mm = segMm(seg);
+    let text;
+    if (refIdx >= 0 && refMm > 1e-9) {
+      text = lineIndex === refIdx ? '1' : (mm / refMm).toFixed(2);
+    } else {
+      text = `${mm.toFixed(2)} mm`;
+    }
+    const isRefLabel = refIdx >= 0 && refMm > 1e-9 && lineIndex === refIdx;
     const tw = ctx.measureText(text).width;
     labelTexts.push(text);
+    labelIsRef.push(isRefLabel);
     labelItems.push({
       midX: (x1 + x2) / 2,
       midY: (y1 + y2) / 2,
@@ -165,16 +201,19 @@ function drawMeasurementsOnCanvas(ctx, width, height, measurements, pxPerMm) {
       pad,
       boxH,
     });
-  }
+  });
 
   const placements = computeMeasurementLabelPlacements(labelItems);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (let i = 0; i < placements.length; i += 1) {
     const pl = placements[i];
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    const isRef = labelIsRef[i];
+    ctx.fillStyle = isRef
+      ? 'rgba(124, 45, 18, 0.88)'
+      : 'rgba(0,0,0,0.65)';
     ctx.fillRect(pl.cx - pl.boxW / 2, pl.cy - boxH / 2, pl.boxW, boxH);
-    ctx.fillStyle = '#b6f7c4';
+    ctx.fillStyle = isRef ? '#ffedd5' : '#b6f7c4';
     ctx.fillText(labelTexts[i], pl.cx, pl.cy);
   }
   ctx.restore();
