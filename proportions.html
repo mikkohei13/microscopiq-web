@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Relative measurements</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #000;
+      color: #eee;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    #preview-area {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      background: #000;
+      overflow: hidden;
+    }
+    #image {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: none;
+    }
+    #overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    #overlay.active { cursor: crosshair; }
+    #placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #888;
+      pointer-events: none;
+    }
+    #bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0.6rem 0.75rem;
+      background: #1a1a1a;
+      border-top: 1px solid #333;
+    }
+    #bar button:disabled { opacity: 0.4; }
+    #bar button, #bar label {
+      font: inherit;
+      font-size: 0.9rem;
+    }
+    #bar button {
+      background: #333;
+      color: #eee;
+      border: 1px solid #555;
+      border-radius: 4px;
+      padding: 0.35rem 0.65rem;
+      cursor: pointer;
+    }
+    #file-input { font-size: 0.85rem; }
+    #preview-area.drag-over {
+      outline: 2px dashed #666;
+      outline-offset: -4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="preview-area">
+      <p id="placeholder">Drop a JPG or PNG image here, or browse below</p>
+      <img id="image" alt="" />
+      <canvas id="overlay" aria-label="Measurement overlay"></canvas>
+    </div>
+    <div id="bar">
+      <label>
+        Image
+        <input id="file-input" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" />
+      </label>
+      <button type="button" id="btn-delete" disabled>Delete selected</button>
+      <button type="button" id="btn-clear" disabled>Clear all</button>
+    </div>
+  </div>
+
+  <script>
+    const app = document.getElementById('app');
+    const container = document.getElementById('preview-area');
+    const image = document.getElementById('image');
+    const overlay = document.getElementById('overlay');
+    const placeholder = document.getElementById('placeholder');
+    const fileInput = document.getElementById('file-input');
+    const btnDelete = document.getElementById('btn-delete');
+    const btnClear = document.getElementById('btn-clear');
+
+    let imageReady = false;
+    /** @type {{ nx1: number, ny1: number, nx2: number, ny2: number }[]} */
+    let lines = [];
+    let draft = null;
+    let selectedIndex = -1;
+    let refIndex = -1;
+    let editDrag = null;
+
+    function setRef(index) {
+      if (index >= 0 && index < lines.length) {
+        refIndex = index;
+      }
+    }
+
+    function clamp01(v) {
+      return Math.min(1, Math.max(0, v));
+    }
+
+    function getContentRect() {
+      const cw = container.clientWidth;
+      const ch = container.clientHeight;
+      const iw = image.naturalWidth;
+      const ih = image.naturalHeight;
+      if (!iw || !ih) {
+        return { left: 0, top: 0, width: cw, height: ch, imageWidth: 0, imageHeight: 0 };
+      }
+      const scale = Math.min(cw / iw, ch / ih);
+      const width = iw * scale;
+      const height = ih * scale;
+      return {
+        left: (cw - width) / 2,
+        top: (ch - height) / 2,
+        width,
+        height,
+        imageWidth: iw,
+        imageHeight: ih,
+      };
+    }
+
+    function clientToNormalized(clientX, clientY) {
+      const rect = container.getBoundingClientRect();
+      const cr = getContentRect();
+      const x = clientX - rect.left - cr.left;
+      const y = clientY - rect.top - cr.top;
+      const nx = cr.width > 0 ? x / cr.width : 0;
+      const ny = cr.height > 0 ? y / cr.height : 0;
+      const inside = nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1;
+      return { nx: clamp01(nx), ny: clamp01(ny), inside };
+    }
+
+    function normalizedToClient(nx, ny) {
+      const cr = getContentRect();
+      return { x: cr.left + nx * cr.width, y: cr.top + ny * cr.height };
+    }
+
+    const MIN_SEGMENT_PX = 2;
+
+    /** Pixel length of a normalized segment. */
+    function segmentPx(seg) {
+      const cr = getContentRect();
+      if (!cr.imageWidth || !cr.imageHeight) return 0;
+      const dx = (seg.nx2 - seg.nx1) * cr.imageWidth;
+      const dy = (seg.ny2 - seg.ny1) * cr.imageHeight;
+      return Math.hypot(dx, dy);
+    }
+
+    function segmentRatio(seg, refSeg) {
+      const refPx = segmentPx(refSeg);
+      if (refPx <= 1e-9) return 0;
+      return segmentPx(seg) / refPx;
+    }
+
+    function segmentLabel(seg, lineIndex, refIdx, refSeg) {
+      if (lineIndex === refIdx) return '1';
+      return segmentRatio(seg, refSeg).toFixed(2);
+    }
+
+    function pxDist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function pointToSegmentDistancePx(p, a, b) {
+      const abx = b.x - a.x;
+      const aby = b.y - a.y;
+      const apx = p.x - a.x;
+      const apy = p.y - a.y;
+      const ab2 = abx * abx + aby * aby;
+      if (ab2 <= 1e-6) return Math.hypot(apx, apy);
+      const t = Math.min(1, Math.max(0, (apx * abx + apy * aby) / ab2));
+      return Math.hypot(p.x - (a.x + abx * t), p.y - (a.y + aby * t));
+    }
+
+    function findNearestHit(nx, ny) {
+      if (lines.length === 0) return null;
+      const p = normalizedToClient(nx, ny);
+      const endpointHitRadiusPx = 14;
+      const lineHitRadiusPx = 10;
+      let bestEndpoint = null;
+      let bestEndpointDist = Infinity;
+      let bestLine = null;
+      let bestLineDist = Infinity;
+
+      for (let i = 0; i < lines.length; i += 1) {
+        const seg = lines[i];
+        const p1 = normalizedToClient(seg.nx1, seg.ny1);
+        const p2 = normalizedToClient(seg.nx2, seg.ny2);
+        const d1 = pxDist(p, p1);
+        const d2 = pxDist(p, p2);
+        if (d1 < bestEndpointDist) {
+          bestEndpointDist = d1;
+          bestEndpoint = { type: 'endpoint', lineIndex: i, endpoint: 1 };
+        }
+        if (d2 < bestEndpointDist) {
+          bestEndpointDist = d2;
+          bestEndpoint = { type: 'endpoint', lineIndex: i, endpoint: 2 };
+        }
+        const dLine = pointToSegmentDistancePx(p, p1, p2);
+        if (dLine < bestLineDist) {
+          bestLineDist = dLine;
+          bestLine = { type: 'line', lineIndex: i };
+        }
+      }
+
+      if (bestEndpoint && bestEndpointDist <= endpointHitRadiusPx) return bestEndpoint;
+      if (bestLine && bestLineDist <= lineHitRadiusPx) return bestLine;
+      return null;
+    }
+
+    function syncCanvasSize() {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      const dpr = window.devicePixelRatio || 1;
+      overlay.width = Math.round(w * dpr);
+      overlay.height = Math.round(h * dpr);
+      overlay.style.width = `${w}px`;
+      overlay.style.height = `${h}px`;
+      const ctx = overlay.getContext('2d');
+      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return ctx;
+    }
+
+    function getRefIndex() {
+      if (refIndex >= 0 && refIndex < lines.length) return refIndex;
+      return -1;
+    }
+
+    function drawSegmentStroke(ctx, seg, isDraft, isSelected, isRelativeRef) {
+      const p1 = normalizedToClient(seg.nx1, seg.ny1);
+      const p2 = normalizedToClient(seg.nx2, seg.ny2);
+      ctx.save();
+      ctx.strokeStyle = isDraft
+        ? 'rgba(80, 220, 120, 0.7)'
+        : isRelativeRef
+          ? '#f97316'
+          : isSelected ? '#86efac' : '#4ade80';
+      ctx.lineWidth = isSelected || isRelativeRef ? 3 : 2;
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+
+      if (isSelected && !isDraft) {
+        ctx.fillStyle = isRelativeRef ? '#ffedd5' : '#bbf7d0';
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 1.5;
+        for (const p of [p1, p2]) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawLabel(ctx, seg, lineIndex, refIdx, refSeg) {
+      const p1 = normalizedToClient(seg.nx1, seg.ny1);
+      const p2 = normalizedToClient(seg.nx2, seg.ny2);
+      const text = segmentLabel(seg, lineIndex, refIdx, refSeg);
+      const isRefLabel =
+        refIdx >= 0 && segmentPx(refSeg) > 1e-9 && lineIndex >= 0 && lineIndex === refIdx;
+      const font = '13px system-ui, sans-serif';
+      const pad = 4;
+      const boxH = 18;
+      ctx.font = font;
+      const tw = ctx.measureText(text).width;
+      const boxW = tw + 2 * pad;
+      const midX = (p1.x + p2.x) / 2;
+      const midY = (p1.y + p2.y) / 2;
+      const vx = p2.x - p1.x;
+      const vy = p2.y - p1.y;
+      const len = Math.hypot(vx, vy) || 1;
+      let nx = -vy / len;
+      let ny = vx / len;
+      if (ny > 0) { nx = vy / len; ny = -vx / len; }
+      const cx = midX + nx * 14;
+      const cy = midY + ny * 14;
+
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = isRefLabel ? 'rgba(124, 45, 18, 0.88)' : 'rgba(0,0,0,0.65)';
+      ctx.fillRect(cx - boxW / 2, cy - boxH / 2, boxW, boxH);
+      ctx.fillStyle = isRefLabel ? '#ffedd5' : '#b6f7c4';
+      ctx.fillText(text, cx, cy);
+      ctx.restore();
+    }
+
+    function redraw() {
+      const ctx = syncCanvasSize();
+      if (!ctx) return;
+      ctx.clearRect(0, 0, container.clientWidth, container.clientHeight);
+      if (!imageReady) return;
+
+      const refIdx = getRefIndex();
+      const refSeg = refIdx >= 0 ? lines[refIdx] : null;
+
+      for (let i = 0; i < lines.length; i += 1) {
+        drawSegmentStroke(
+          ctx,
+          lines[i],
+          false,
+          i === selectedIndex,
+          refIdx >= 0 && i === refIdx
+        );
+      }
+      if (draft) drawSegmentStroke(ctx, draft, true, false, false);
+
+      if (refSeg && segmentPx(refSeg) > 1e-9) {
+        for (let i = 0; i < lines.length; i += 1) {
+          drawLabel(ctx, lines[i], i, refIdx, refSeg);
+        }
+        if (draft) drawLabel(ctx, draft, -1, refIdx, refSeg);
+      }
+
+      updateButtons();
+    }
+
+    function updateButtons() {
+      const active = imageReady;
+      btnDelete.disabled = !active || selectedIndex < 0;
+      btnClear.disabled = !active || lines.length === 0;
+    }
+
+    function clearMeasurements() {
+      lines = [];
+      draft = null;
+      selectedIndex = -1;
+      refIndex = -1;
+      editDrag = null;
+      redraw();
+    }
+
+    function isAcceptedImage(file) {
+      const type = (file.type || '').toLowerCase();
+      if (type === 'image/jpeg' || type === 'image/png') return true;
+      return /\.(jpe?g|png)$/i.test(file.name || '');
+    }
+
+    function resetImageUi() {
+      imageReady = false;
+      image.style.display = 'none';
+      image.removeAttribute('src');
+      placeholder.style.display = 'flex';
+      overlay.classList.remove('active');
+      clearMeasurements();
+    }
+
+    function loadImageFile(file) {
+      if (!file || !isAcceptedImage(file)) {
+        alert('Please use a JPG or PNG image.');
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        imageReady = true;
+        image.style.display = 'block';
+        placeholder.style.display = 'none';
+        overlay.classList.add('active');
+        fileInput.value = '';
+        clearMeasurements();
+        redraw();
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        alert('Could not load image.');
+        resetImageUi();
+      };
+      image.src = url;
+    }
+
+    function hasImageDrag(dt) {
+      if (!dt || !dt.types) return false;
+      return Array.from(dt.types).includes('Files');
+    }
+
+    app.addEventListener('dragenter', (e) => {
+      if (!hasImageDrag(e.dataTransfer)) return;
+      e.preventDefault();
+      container.classList.add('drag-over');
+    });
+
+    app.addEventListener('dragover', (e) => {
+      if (!hasImageDrag(e.dataTransfer)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+
+    app.addEventListener('dragleave', (e) => {
+      const related = e.relatedTarget;
+      if (related && app.contains(related)) return;
+      container.classList.remove('drag-over');
+    });
+
+    app.addEventListener('drop', (e) => {
+      e.preventDefault();
+      container.classList.remove('drag-over');
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file) loadImageFile(file);
+    });
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (file) loadImageFile(file);
+    });
+
+    overlay.addEventListener('pointerdown', (e) => {
+      if (!imageReady) return;
+      const { nx, ny, inside } = clientToNormalized(e.clientX, e.clientY);
+      if (!inside) return;
+      const hit = findNearestHit(nx, ny);
+      if (hit && hit.type === 'endpoint') {
+        selectedIndex = hit.lineIndex;
+        setRef(hit.lineIndex);
+        editDrag = hit;
+        draft = null;
+      } else if (hit && hit.type === 'line') {
+        selectedIndex = hit.lineIndex;
+        setRef(hit.lineIndex);
+        editDrag = null;
+        draft = null;
+      } else {
+        selectedIndex = -1;
+        editDrag = null;
+        draft = { nx1: nx, ny1: ny, nx2: nx, ny2: ny };
+      }
+      try { e.target.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      e.preventDefault();
+      redraw();
+    });
+
+    overlay.addEventListener('pointermove', (e) => {
+      if (!imageReady) return;
+      const { nx, ny } = clientToNormalized(e.clientX, e.clientY);
+      if (draft) {
+        draft.nx2 = clamp01(nx);
+        draft.ny2 = clamp01(ny);
+      } else if (editDrag) {
+        const seg = lines[editDrag.lineIndex];
+        if (!seg) return;
+        if (editDrag.endpoint === 1) {
+          seg.nx1 = clamp01(nx);
+          seg.ny1 = clamp01(ny);
+        } else {
+          seg.nx2 = clamp01(nx);
+          seg.ny2 = clamp01(ny);
+        }
+      } else {
+        return;
+      }
+      e.preventDefault();
+      redraw();
+    });
+
+    function endPointerInteraction(e) {
+      if (!imageReady) return;
+      if (draft) {
+        if (segmentPx(draft) > MIN_SEGMENT_PX) {
+          lines.push({ ...draft });
+          selectedIndex = lines.length - 1;
+          setRef(selectedIndex);
+        }
+      }
+      draft = null;
+      editDrag = null;
+      e.preventDefault();
+      redraw();
+    }
+
+    overlay.addEventListener('pointerup', (e) => {
+      endPointerInteraction(e);
+      try { e.target.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    });
+
+    overlay.addEventListener('pointercancel', endPointerInteraction);
+    overlay.addEventListener('lostpointercapture', endPointerInteraction);
+
+    btnDelete.addEventListener('click', () => {
+      if (selectedIndex < 0 || selectedIndex >= lines.length) return;
+      const removed = selectedIndex;
+      lines.splice(removed, 1);
+      if (refIndex === removed) {
+        refIndex = lines.length > 0 ? 0 : -1;
+      } else if (refIndex > removed) {
+        refIndex -= 1;
+      }
+      selectedIndex = -1;
+      editDrag = null;
+      redraw();
+    });
+
+    btnClear.addEventListener('click', clearMeasurements);
+
+    new ResizeObserver(redraw).observe(container);
+    redraw();
+  </script>
+</body>
+</html>

@@ -2,6 +2,9 @@
  * Camera: getUserMedia, optional ImageCapture, burst with cancellation.
  */
 
+/** Temporary dev: log supported constraints, track capabilities, and settings after each successful start. */
+const DEBUG_LOG_CAMERA_CAPS = true;
+
 /**
  * @typedef {Object} CameraHandle
  * @property {MediaStream | null} stream
@@ -36,6 +39,7 @@ export async function startCamera(video) {
           frameRate: settings.frameRate || null,
           facingMode: settings.facingMode || null,
         });
+        logCameraCapsForDev(track);
       }
       let imageCapture = null;
       if (track && 'ImageCapture' in window) {
@@ -276,6 +280,29 @@ function describeConstraints(value) {
   } catch {
     return '[unserializable constraints]';
   }
+}
+
+/**
+ * @param {MediaStreamTrack} track
+ */
+function logCameraCapsForDev(track) {
+  if (!DEBUG_LOG_CAMERA_CAPS) return;
+  try {
+    console.log(
+      '[camera/dev] Supported constraints:',
+      navigator.mediaDevices.getSupportedConstraints()
+    );
+  } catch (e) {
+    console.warn('[camera/dev] getSupportedConstraints failed', e);
+  }
+  console.log(
+    '[camera/dev] Capabilities:',
+    typeof track.getCapabilities === 'function' ? track.getCapabilities() : '(no getCapabilities)'
+  );
+  console.log(
+    '[camera/dev] Settings:',
+    typeof track.getSettings === 'function' ? track.getSettings() : '(no getSettings)'
+  );
 }
 
 /**
