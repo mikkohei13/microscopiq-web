@@ -8,12 +8,12 @@ import {
 } from './camera.js';
 import { setupOverlayResize, syncCanvasSize } from './overlay.js';
 import { createCalibrationController } from './calibration.js';
-import { createMeasurementController } from './measurement.js';
+import { createMeasurementController } from './measurement.js?v=6';
 import {
   composePngWithScaleBar,
   timestampFilename,
   saveBlobToDirectory,
-} from './export.js';
+} from './export.js?v=6';
 import { readBurstSettings, writeBurstSettings } from './settings.js';
 
 const previewArea = document.getElementById('preview-area');
@@ -33,6 +33,7 @@ const btnCalibrationCancel = document.getElementById('btn-calibration-cancel');
 const btnClearCalibration = document.getElementById('btn-clear-calibration');
 const btnClearMeasurements = document.getElementById('btn-clear-measurements');
 const btnDeleteMeasurement = document.getElementById('btn-delete-measurement');
+const btnToggleMeasurementMode = document.getElementById('btn-toggle-measurement-mode');
 const btnCapture = document.getElementById('btn-capture');
 const btnCaptureWithMeasurements = document.getElementById(
   'btn-capture-with-measurements'
@@ -265,6 +266,12 @@ function renderUiState() {
   measurement.setActive(shouldMeasureBeActive);
   overlay.classList.toggle('calibration-cursor', isAdjusting);
   overlay.classList.toggle('measure-cursor', shouldMeasureBeActive);
+  if (btnToggleMeasurementMode) {
+    btnToggleMeasurementMode.disabled = !shouldMeasureBeActive;
+    btnToggleMeasurementMode.textContent = measurement.isRelativeMode()
+      ? 'Switch to mm'
+      : 'Switch to relative';
+  }
   if (calibration.getPhase() !== 'calibrated') {
     overlay.classList.remove('scale-bar-cursor', 'scale-bar-dragging');
   }
@@ -378,6 +385,13 @@ btnDeleteMeasurement.addEventListener('click', () => {
   }
 });
 
+btnToggleMeasurementMode.addEventListener('click', () => {
+  if (btnToggleMeasurementMode.disabled) return;
+  measurement.setRelativeMode(!measurement.isRelativeMode());
+  renderUiState();
+  redraw();
+});
+
 function parseBurstOptions() {
   let count = parseInt(burstCountInput.value, 10);
   let intervalSec = parseFloat(burstIntervalInput.value);
@@ -436,6 +450,8 @@ async function exportCapture(rawBlob, withMeasurements) {
   const finalBlob = await composePngWithScaleBar(rawBlob, px, {
     withMeasurements,
     measurements: withMeasurements ? measurement.getLines() : [],
+    measurementRefIndex: withMeasurements ? measurement.getRefIndex() : -1,
+    measurementRelative: withMeasurements && measurement.isRelativeMode(),
     scaleBarAnchor: calibration.getScaleBarAnchor(),
   });
   const name = timestampFilename();
@@ -466,6 +482,8 @@ async function doCapture(withMeasurements = false) {
           const finalBlob = await composePngWithScaleBar(blob, px, {
             withMeasurements,
             measurements: measuredLines,
+            measurementRefIndex: withMeasurements ? measurement.getRefIndex() : -1,
+            measurementRelative: withMeasurements && measurement.isRelativeMode(),
             scaleBarAnchor: calibration.getScaleBarAnchor(),
           });
           const base = timestampFilename().replace(/\.png$/i, '');

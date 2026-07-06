@@ -19,6 +19,8 @@ export function createMeasurementController(options) {
   /** @type {NormSegment[]} */
   let lines = [];
   let active = false;
+  let relativeMode = false;
+  let refIndex = -1;
   /** @type {NormSegment | null} */
   let draft = null;
   let selectedIndex = -1;
@@ -50,6 +52,32 @@ export function createMeasurementController(options) {
     const qx = a.x + abx * t;
     const qy = a.y + aby * t;
     return Math.hypot(p.x - qx, p.y - qy);
+  }
+
+  function setRef(index) {
+    if (index >= 0 && index < lines.length) {
+      refIndex = index;
+    }
+  }
+
+  function getRefIndex() {
+    if (refIndex >= 0 && refIndex < lines.length) return refIndex;
+    return -1;
+  }
+
+  function segmentPx(seg) {
+    return normDistanceToSourcePixels(seg.nx1, seg.ny1, seg.nx2, seg.ny2, video);
+  }
+
+  function segmentRatio(seg, refSeg) {
+    const refPx = segmentPx(refSeg);
+    if (refPx <= 1e-9) return 0;
+    return segmentPx(seg) / refPx;
+  }
+
+  function segmentLabel(seg, lineIndex, refIdx, refSeg) {
+    if (lineIndex === refIdx) return '1';
+    return segmentRatio(seg, refSeg).toFixed(2);
   }
 
   function findNearestHit(nx, ny) {
@@ -110,16 +138,35 @@ export function createMeasurementController(options) {
     draft = null;
     editDrag = null;
     selectedIndex = -1;
+    refIndex = -1;
     triggerRedraw();
   }
 
   function deleteSelected() {
     if (selectedIndex < 0 || selectedIndex >= lines.length) return false;
-    lines.splice(selectedIndex, 1);
+    const removed = selectedIndex;
+    lines.splice(removed, 1);
+    if (refIndex === removed) {
+      refIndex = lines.length > 0 ? 0 : -1;
+    } else if (refIndex > removed) {
+      refIndex -= 1;
+    }
     selectedIndex = -1;
     editDrag = null;
     triggerRedraw();
     return true;
+  }
+
+  function setRelativeMode(on) {
+    relativeMode = on;
+    if (on && refIndex < 0 && lines.length > 0) {
+      refIndex = 0;
+    }
+    triggerRedraw();
+  }
+
+  function isRelativeMode() {
+    return relativeMode;
   }
 
   /**
@@ -137,10 +184,12 @@ export function createMeasurementController(options) {
     const hit = findNearestHit(nx, ny);
     if (hit && hit.type === 'endpoint') {
       selectedIndex = hit.lineIndex;
+      setRef(hit.lineIndex);
       editDrag = hit;
       draft = null;
     } else if (hit && hit.type === 'line') {
       selectedIndex = hit.lineIndex;
+      setRef(hit.lineIndex);
       editDrag = null;
       draft = null;
     } else {
@@ -204,6 +253,7 @@ export function createMeasurementController(options) {
       if (d > 2) {
         lines.push({ ...draft });
         selectedIndex = lines.length - 1;
+        setRef(selectedIndex);
       }
     }
     draft = null;
@@ -227,24 +277,31 @@ export function createMeasurementController(options) {
     if (!active && lines.length === 0) return;
 
     const pxPerMm = typeof getPxPerMm === 'function' ? getPxPerMm() : null;
+    const refIdx = getRefIndex();
+    const refSeg = refIdx >= 0 ? lines[refIdx] : null;
+    const showRelativeLabels =
+      relativeMode && refSeg != null && segmentPx(refSeg) > 1e-9;
+    const showAbsoluteLabels = !relativeMode && pxPerMm != null && pxPerMm > 0;
 
-    const drawSegmentStroke = (seg, isDraft, isSelected) => {
+    const drawSegmentStroke = (seg, isDraft, isSelected, isRelativeRef) => {
       const p1 = normalizedToClientPixels(seg.nx1, seg.ny1, container, video);
       const p2 = normalizedToClientPixels(seg.nx2, seg.ny2, container, video);
       ctx.save();
       ctx.strokeStyle = isDraft
         ? 'rgba(80, 220, 120, 0.7)'
-        : isSelected
-          ? '#86efac'
-          : '#4ade80';
-      ctx.lineWidth = isSelected ? 3 : 2;
+        : isRelativeRef
+          ? '#f97316'
+          : isSelected
+            ? '#86efac'
+            : '#4ade80';
+      ctx.lineWidth = isSelected || isRelativeRef ? 3 : 2;
       ctx.beginPath();
       ctx.moveTo(p1.x, p1.y);
       ctx.lineTo(p2.x, p2.y);
       ctx.stroke();
 
       if (isSelected && !isDraft) {
-        ctx.fillStyle = '#bbf7d0';
+        ctx.fillStyle = isRelativeRef ? '#ffedd5' : '#bbf7d0';
         ctx.strokeStyle = 'rgba(0,0,0,0.6)';
         ctx.lineWidth = 1.5;
         for (const p of [p1, p2]) {
@@ -258,13 +315,18 @@ export function createMeasurementController(options) {
     };
 
     for (let i = 0; i < lines.length; i += 1) {
-      drawSegmentStroke(lines[i], false, i === selectedIndex);
+      drawSegmentStroke(
+        lines[i],
+        false,
+        i === selectedIndex,
+        showRelativeLabels && i === refIdx
+      );
     }
     if (draft) {
-      drawSegmentStroke(draft, true, false);
+      drawSegmentStroke(draft, true, false, false);
     }
 
-    if (pxPerMm != null && pxPerMm > 0) {
+    if (showRelativeLabels || showAbsoluteLabels) {
       const font = '13px system-ui, sans-serif';
       const pad = 4;
       const boxH = 18;
@@ -273,8 +335,10 @@ export function createMeasurementController(options) {
       const labelItems = [];
       /** @type {string[]} */
       const labelTexts = [];
+      /** @type {boolean[]} */
+      const labelIsRef = [];
 
-      const pushLabel = (seg) => {
+      const pushAbsoluteLabel = (seg) => {
         const p1 = normalizedToClientPixels(seg.nx1, seg.ny1, container, video);
         const p2 = normalizedToClientPixels(seg.nx2, seg.ny2, container, video);
         const srcPx = normDistanceToSourcePixels(
@@ -288,6 +352,7 @@ export function createMeasurementController(options) {
         const text = `${mm.toFixed(2)} mm`;
         const tw = ctx.measureText(text).width;
         labelTexts.push(text);
+        labelIsRef.push(false);
         labelItems.push({
           midX: (p1.x + p2.x) / 2,
           midY: (p1.y + p2.y) / 2,
@@ -299,11 +364,39 @@ export function createMeasurementController(options) {
         });
       };
 
-      for (let i = 0; i < lines.length; i += 1) {
-        pushLabel(lines[i]);
-      }
-      if (draft) {
-        pushLabel(draft);
+      const pushRelativeLabel = (seg, lineIndex) => {
+        const p1 = normalizedToClientPixels(seg.nx1, seg.ny1, container, video);
+        const p2 = normalizedToClientPixels(seg.nx2, seg.ny2, container, video);
+        const text = segmentLabel(seg, lineIndex, refIdx, refSeg);
+        const isRefLabel = lineIndex >= 0 && lineIndex === refIdx;
+        const tw = ctx.measureText(text).width;
+        labelTexts.push(text);
+        labelIsRef.push(isRefLabel);
+        labelItems.push({
+          midX: (p1.x + p2.x) / 2,
+          midY: (p1.y + p2.y) / 2,
+          vx: p2.x - p1.x,
+          vy: p2.y - p1.y,
+          tw,
+          pad,
+          boxH,
+        });
+      };
+
+      if (showRelativeLabels) {
+        for (let i = 0; i < lines.length; i += 1) {
+          pushRelativeLabel(lines[i], i);
+        }
+        if (draft) {
+          pushRelativeLabel(draft, -1);
+        }
+      } else {
+        for (let i = 0; i < lines.length; i += 1) {
+          pushAbsoluteLabel(lines[i]);
+        }
+        if (draft) {
+          pushAbsoluteLabel(draft);
+        }
       }
 
       if (labelItems.length > 0) {
@@ -315,14 +408,17 @@ export function createMeasurementController(options) {
         for (let i = 0; i < placements.length; i += 1) {
           const pl = placements[i];
           const text = labelTexts[i];
-          ctx.fillStyle = 'rgba(0,0,0,0.65)';
+          const isRefLabel = labelIsRef[i];
+          ctx.fillStyle = isRefLabel
+            ? 'rgba(124, 45, 18, 0.88)'
+            : 'rgba(0,0,0,0.65)';
           ctx.fillRect(
             pl.cx - pl.boxW / 2,
             pl.cy - boxH / 2,
             pl.boxW,
             boxH
           );
-          ctx.fillStyle = '#b6f7c4';
+          ctx.fillStyle = isRefLabel ? '#ffedd5' : '#b6f7c4';
           ctx.fillText(text, pl.cx, pl.cy);
         }
         ctx.restore();
@@ -341,6 +437,9 @@ export function createMeasurementController(options) {
     hasLines: () => lines.length > 0,
     hasSelection: () => selectedIndex >= 0 && selectedIndex < lines.length,
     deleteSelected,
+    setRelativeMode,
+    isRelativeMode,
+    getRefIndex,
     getLines: () => lines.map((seg) => ({ ...seg })),
   };
 }
