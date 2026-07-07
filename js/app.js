@@ -3,6 +3,7 @@ import {
   startCamera,
   stopCamera,
   captureStill,
+  captureStillFromVideoElement,
   runBurst,
   describeError,
 } from './camera.js';
@@ -34,10 +35,8 @@ const btnClearCalibration = document.getElementById('btn-clear-calibration');
 const btnClearMeasurements = document.getElementById('btn-clear-measurements');
 const btnDeleteMeasurement = document.getElementById('btn-delete-measurement');
 const btnToggleMeasurementMode = document.getElementById('btn-toggle-measurement-mode');
-const btnCapture = document.getElementById('btn-capture');
-const btnCaptureWithMeasurements = document.getElementById(
-  'btn-capture-with-measurements'
-);
+const btnCaptureHiRes = document.getElementById('btn-capture-hi-res');
+const btnCaptureMeasurements = document.getElementById('btn-capture-measurements');
 const normalCaptureButtons = document.getElementById('normal-capture-buttons');
 const btnCancelBurst = document.getElementById('btn-cancel-burst');
 
@@ -52,10 +51,8 @@ const calibrationForm = document.getElementById('calibration-form');
 const calibrationMmInput = document.getElementById('calibration-mm');
 const calibrationDialogCancel = document.getElementById('calibration-dialog-cancel');
 
-const kbdCapture = document.getElementById('kbd-capture');
-const kbdCaptureWithMeasurements = document.getElementById(
-  'kbd-capture-with-measurements'
-);
+const kbdCaptureHiRes = document.getElementById('kbd-capture-hi-res');
+const kbdCaptureMeasurements = document.getElementById('kbd-capture-measurements');
 const kbdCancelBurst = document.getElementById('kbd-cancel-burst');
 
 /** @type {import('./camera.js').CameraHandle | null} */
@@ -282,15 +279,16 @@ function renderUiState() {
     !canUseControls || !isCalibrated || !measurement.hasSelection();
 
   const canCapture = canUseControls && !burstInProgress;
-  btnCapture.disabled = !canCapture;
-  btnCaptureWithMeasurements.disabled = !canCapture;
+  btnCaptureHiRes.disabled = !canCapture;
+  btnCaptureMeasurements.classList.toggle('hidden', !isCalibrated);
+  btnCaptureMeasurements.disabled = !canCapture || !isCalibrated;
 
   normalCaptureButtons.classList.toggle('hidden', burstInProgress);
   btnCancelBurst.classList.toggle('hidden', !burstInProgress);
   btnCancelBurst.disabled = !canUseControls || !burstInProgress;
 
-  kbdCapture.disabled = !canUseControls;
-  kbdCaptureWithMeasurements.disabled = !canUseControls;
+  kbdCaptureHiRes.disabled = !canUseControls;
+  kbdCaptureMeasurements.disabled = !canUseControls || !isCalibrated;
   kbdCancelBurst.disabled = !canUseControls || !burstInProgress;
 }
 
@@ -442,32 +440,43 @@ burstCountInput.addEventListener('change', persistBurstFromInputs);
 burstIntervalInput.addEventListener('change', persistBurstFromInputs);
 
 /**
- * @param {Blob} rawBlob
- * @param {boolean} withMeasurements
+ * @param {Blob} blob
+ * @returns {string}
  */
-async function exportCapture(rawBlob, withMeasurements) {
-  const px = calibration.getPxPerMm();
-  const finalBlob = await composePngWithScaleBar(rawBlob, px, {
-    withMeasurements,
-    measurements: withMeasurements ? measurement.getLines() : [],
-    measurementRefIndex: withMeasurements ? measurement.getRefIndex() : -1,
-    measurementRelative: withMeasurements && measurement.isRelativeMode(),
-    scaleBarAnchor: calibration.getScaleBarAnchor(),
-  });
-  const name = timestampFilename();
-  await saveBlobToDirectory(null, finalBlob, name);
+function filenameForRawBlob(blob) {
+  const base = timestampFilename().replace(/\.png$/i, '');
+  const ext = blob.type === 'image/jpeg' ? 'jpg' : 'png';
+  return `${base}.${ext}`;
 }
 
 /**
- * @param {boolean} withMeasurements
+ * @param {Blob} blob
  */
-async function doCapture(withMeasurements = false) {
+async function saveRawCapture(blob) {
+  await saveBlobToDirectory(null, blob, filenameForRawBlob(blob));
+}
+
+/**
+ * @param {Blob} rawBlob
+ */
+async function exportCaptureWithMeasurements(rawBlob) {
+  const px = calibration.getPxPerMm();
+  const finalBlob = await composePngWithScaleBar(rawBlob, px, {
+    withMeasurements: true,
+    measurements: measurement.getLines(),
+    measurementRefIndex: measurement.getRefIndex(),
+    measurementRelative: measurement.isRelativeMode(),
+    scaleBarAnchor: calibration.getScaleBarAnchor(),
+  });
+  await saveBlobToDirectory(null, finalBlob, timestampFilename());
+}
+
+async function doCaptureHiRes() {
   if (!cameraHandle?.stream || burstInProgress) return;
   hideError();
 
   if (burstMode) {
     const { count, intervalMs } = persistBurstFromInputs();
-    const measuredLines = withMeasurements ? measurement.getLines() : [];
     burstInProgress = true;
     burstCancelled = false;
     renderUiState();
@@ -478,17 +487,10 @@ async function doCapture(withMeasurements = false) {
         isCancelled: () => burstCancelled,
         onFrame: async (i, blob) => {
           flashCapture();
-          const px = calibration.getPxPerMm();
-          const finalBlob = await composePngWithScaleBar(blob, px, {
-            withMeasurements,
-            measurements: measuredLines,
-            measurementRefIndex: withMeasurements ? measurement.getRefIndex() : -1,
-            measurementRelative: withMeasurements && measurement.isRelativeMode(),
-            scaleBarAnchor: calibration.getScaleBarAnchor(),
-          });
           const base = timestampFilename().replace(/\.png$/i, '');
-          const name = `${base}_${String(i + 1).padStart(2, '0')}.png`;
-          await saveBlobToDirectory(null, finalBlob, name);
+          const ext = blob.type === 'image/jpeg' ? 'jpg' : 'png';
+          const name = `${base}_${String(i + 1).padStart(2, '0')}.${ext}`;
+          await saveBlobToDirectory(null, blob, name);
         },
       });
     } catch (e) {
@@ -503,26 +505,40 @@ async function doCapture(withMeasurements = false) {
   try {
     flashCapture();
     const blob = await captureStill(cameraHandle, video);
-    await exportCapture(blob, withMeasurements);
+    await saveRawCapture(blob);
   } catch (e) {
     showError(describeError(e) || 'Capture failed');
   }
 }
 
-btnCapture.addEventListener('click', () => {
-  void doCapture(false);
+async function doCaptureMeasurements() {
+  if (!cameraHandle?.stream || burstInProgress) return;
+  if (calibration.getPhase() !== 'calibrated') return;
+  hideError();
+
+  try {
+    flashCapture();
+    const blob = await captureStillFromVideoElement(video);
+    await exportCaptureWithMeasurements(blob);
+  } catch (e) {
+    showError(describeError(e) || 'Capture failed');
+  }
+}
+
+btnCaptureHiRes.addEventListener('click', () => {
+  void doCaptureHiRes();
 });
 
-btnCaptureWithMeasurements.addEventListener('click', () => {
-  void doCapture(true);
+btnCaptureMeasurements.addEventListener('click', () => {
+  void doCaptureMeasurements();
 });
 
-kbdCapture.addEventListener('click', () => {
-  void doCapture(false);
+kbdCaptureHiRes.addEventListener('click', () => {
+  void doCaptureHiRes();
 });
 
-kbdCaptureWithMeasurements.addEventListener('click', () => {
-  void doCapture(true);
+kbdCaptureMeasurements.addEventListener('click', () => {
+  void doCaptureMeasurements();
 });
 
 function cancelBurstInFlight() {
@@ -543,10 +559,10 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.code === 'Enter' || e.key === 'Enter') {
     e.preventDefault();
-    if (e.shiftKey) {
-      kbdCaptureWithMeasurements.click();
+    if (e.shiftKey && calibration.getPhase() === 'calibrated') {
+      kbdCaptureMeasurements.click();
     } else {
-      kbdCapture.click();
+      kbdCaptureHiRes.click();
     }
   }
   if (e.code === 'Space' || e.key === ' ') {

@@ -28,8 +28,8 @@
 
       <div class="control-group">
         <div id="normal-capture-buttons" class="capture-button-row">
-          <button type="button" id="btn-capture">Capture</button>
-          <button type="button" id="btn-capture-with-measurements">with measurements</button>
+          <button type="button" id="btn-capture-measurements" class="hidden">Capture measurements</button>
+          <button type="button" id="btn-capture-hi-res">Capture hi-res</button>
         </div>
         <button type="button" id="btn-cancel-burst" class="btn-cancel-burst hidden">
           Cancel burst
@@ -68,8 +68,8 @@
 
     <!-- Hidden buttons for keyboard shortcuts (screen reader / focus) -->
     <div class="sr-only">
-      <button type="button" id="kbd-capture">Capture shortcut</button>
-      <button type="button" id="kbd-capture-with-measurements">Capture with measurements shortcut</button>
+      <button type="button" id="kbd-capture-hi-res">Capture hi-res shortcut</button>
+      <button type="button" id="kbd-capture-measurements">Capture measurements shortcut</button>
       <button type="button" id="kbd-cancel-burst">Cancel burst shortcut</button>
     </div>
   </div>
@@ -101,6 +101,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="js/app.js?v=6"></script>
+  <script type="module" src="js/app.js?v=7"></script>
 </body>
 </html>
