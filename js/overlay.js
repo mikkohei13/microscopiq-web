@@ -4,15 +4,18 @@
  */
 
 /**
+ * Letterboxed content rect for media of size (mediaWidth × mediaHeight) in a container
+ * (same math as CSS object-fit: contain, centered).
  * @param {HTMLElement} container
- * @param {HTMLVideoElement} video
+ * @param {number} mediaWidth
+ * @param {number} mediaHeight
  * @returns {{ left: number, top: number, width: number, height: number, videoWidth: number, videoHeight: number }}
  */
-export function getVideoContentRect(container, video) {
+export function getContainContentRect(container, mediaWidth, mediaHeight) {
   const cw = container.clientWidth;
   const ch = container.clientHeight;
-  const vw = video.videoWidth;
-  const vh = video.videoHeight;
+  const vw = mediaWidth;
+  const vh = mediaHeight;
   if (!vw || !vh) {
     return {
       left: 0,
@@ -29,6 +32,15 @@ export function getVideoContentRect(container, video) {
   const left = (cw - width) / 2;
   const top = (ch - height) / 2;
   return { left, top, width, height, videoWidth: vw, videoHeight: vh };
+}
+
+/**
+ * @param {HTMLElement} container
+ * @param {HTMLVideoElement} video
+ * @returns {{ left: number, top: number, width: number, height: number, videoWidth: number, videoHeight: number }}
+ */
+export function getVideoContentRect(container, video) {
+  return getContainContentRect(container, video.videoWidth, video.videoHeight);
 }
 
 /**

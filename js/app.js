@@ -7,7 +7,11 @@ import {
   runBurst,
   describeError,
 } from './camera.js';
-import { setupOverlayResize, syncCanvasSize, getVideoContentRect } from './overlay.js';
+import {
+  setupOverlayResize,
+  syncCanvasSize,
+  getContainContentRect,
+} from './overlay.js';
 import { createCalibrationController } from './calibration.js';
 import { createMeasurementController } from './measurement.js?v=6';
 import {
@@ -80,6 +84,9 @@ let autoCalReviewing = false;
 let pendingAutoCal = null;
 /** @type {string | null} */
 let autoCalStillUrl = null;
+/** Capture pixel size used for review letterboxing (matches detection coords). */
+let autoCalMediaW = 0;
+let autoCalMediaH = 0;
 
 /** @type {string | null} */
 let lastCameraStartError = null;
@@ -224,6 +231,9 @@ function flashCapture() {
 function exitAutoCalReview() {
   autoCalReviewing = false;
   pendingAutoCal = null;
+  autoCalMediaW = 0;
+  autoCalMediaH = 0;
+  autoCalStill.onload = null;
   if (autoCalStillUrl) {
     URL.revokeObjectURL(autoCalStillUrl);
     autoCalStillUrl = null;
@@ -236,32 +246,53 @@ function exitAutoCalReview() {
 /**
  * @param {string} objectUrl
  * @param {import('./auto-calibrate.js').AutoCalResult} result
+ * @param {number} mediaW
+ * @param {number} mediaH
  */
-function enterAutoCalReview(objectUrl, result) {
+function enterAutoCalReview(objectUrl, result, mediaW, mediaH) {
   autoCalReviewing = true;
   pendingAutoCal = result;
   autoCalStillUrl = objectUrl;
-  autoCalStill.src = objectUrl;
-  autoCalStill.classList.remove('hidden');
+  autoCalMediaW = mediaW;
+  autoCalMediaH = mediaH;
+  // Keep the <img> hidden: Chrome's object-fit letterboxing for <img> vs <video>
+  // can disagree. Freeze frame + marks are both drawn on the overlay canvas.
+  autoCalStill.classList.add('hidden');
   video.classList.add('hidden');
   if (scaleBarLabel) {
     scaleBarLabel.classList.add('hidden');
     scaleBarLabel.setAttribute('aria-hidden', 'true');
   }
-  renderUiState();
-  redraw();
+  const finish = () => {
+    renderUiState();
+    redraw();
+  };
+  autoCalStill.onload = () => {
+    autoCalStill.onload = null;
+    finish();
+  };
+  autoCalStill.src = objectUrl;
+  if (autoCalStill.complete && autoCalStill.naturalWidth > 0) {
+    autoCalStill.onload = null;
+    finish();
+  }
 }
 
 /**
- * Draw Large A / Large B / Reference marks for auto-cal review.
+ * Draw freeze frame + Large A / Large B / Reference marks for auto-cal review.
+ * Frame and marks share the same contain-rect so they stay aligned.
  * @param {CanvasRenderingContext2D} ctx
  * @param {import('./auto-cal-match.js').PatternMatch} match
  */
 function drawAutoCalMatch(ctx, match) {
-  const vr = getVideoContentRect(previewArea, video);
-  const vw = vr.videoWidth || video.videoWidth;
-  const vh = vr.videoHeight || video.videoHeight;
+  const vw = autoCalMediaW;
+  const vh = autoCalMediaH;
+  const vr = getContainContentRect(previewArea, vw, vh);
   if (!vw || !vh || !vr.width) return;
+
+  if (autoCalStill.naturalWidth > 0) {
+    ctx.drawImage(autoCalStill, vr.left, vr.top, vr.width, vr.height);
+  }
 
   const toX = (sx) => vr.left + (sx / vw) * vr.width;
   const toY = (sy) => vr.top + (sy / vh) * vr.height;
@@ -520,7 +551,7 @@ async function runAutoCalibration() {
       return;
     }
     const url = URL.createObjectURL(blob);
-    enterAutoCalReview(url, result);
+    enterAutoCalReview(url, result, imageData.width, imageData.height);
   } catch (e) {
     showError(describeError(e) || 'Auto calibration failed');
   }
