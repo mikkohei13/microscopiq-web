@@ -2,7 +2,12 @@
  * Connected-component circle candidates from a binary image (pure JS).
  */
 
-import { MIN_CIRCULARITY, MAX_ASPECT, diameterBoundsPx } from './auto-cal-constants.js';
+import {
+  MIN_CIRCULARITY,
+  MAX_ASPECT,
+  MIN_DIAMETER_PX,
+  MAX_DIAMETER_FRAC,
+} from './auto-cal-constants.js';
 
 /**
  * @typedef {Object} Candidate
@@ -30,7 +35,7 @@ import { MIN_CIRCULARITY, MAX_ASPECT, diameterBoundsPx } from './auto-cal-consta
 export function findCandidates(binary, sourceWidth) {
   const { data, width: w, height: h, scale } = binary;
   const blobs = labelBlobs(data, w, h);
-  const bounds = diameterBoundsPx(sourceWidth);
+  const maxDiameter = sourceWidth * MAX_DIAMETER_FRAC;
   /** @type {Candidate[]} */
   const out = [];
 
@@ -77,7 +82,7 @@ export function findCandidates(binary, sourceWidth) {
     } else if (aspect > MAX_ASPECT) {
       c.accepted = false;
       c.rejectReason = 'aspect';
-    } else if (eqDiameter < bounds.refMin || eqDiameter > bounds.largeMax) {
+    } else if (eqDiameter < MIN_DIAMETER_PX || eqDiameter > maxDiameter) {
       c.accepted = false;
       c.rejectReason = 'size';
     }
@@ -86,22 +91,6 @@ export function findCandidates(binary, sourceWidth) {
   }
 
   return out;
-}
-
-/**
- * @param {Candidate[]} candidates
- * @param {number} imageWidth
- */
-export function bucketBySize(candidates, imageWidth) {
-  const bounds = diameterBoundsPx(imageWidth);
-  const accepted = candidates.filter((c) => c.accepted);
-  const large = accepted.filter(
-    (c) => c.eqDiameter >= bounds.largeMin && c.eqDiameter <= bounds.largeMax
-  );
-  const refs = accepted.filter(
-    (c) => c.eqDiameter >= bounds.refMin && c.eqDiameter <= bounds.refMax
-  );
-  return { large, refs, bounds };
 }
 
 /**
