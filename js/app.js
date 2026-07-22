@@ -11,16 +11,19 @@ import {
   setupOverlayResize,
   syncCanvasSize,
   getContainContentRect,
+  getVideoContentRect,
 } from './overlay.js';
 import { createCalibrationController } from './calibration.js';
 import { createMeasurementController } from './measurement.js?v=6';
 import {
   composePngWithScaleBar,
+  cropBlobToNormRect,
   timestampFilename,
   saveBlobToDirectory,
-} from './export.js?v=7';
+} from './export.js?v=8';
 import { readBurstSettings, writeBurstSettings } from './settings.js';
 import { autoCalibrate, blobToImageData } from './auto-calibrate.js';
+import { createObjectDetectController } from './object-detect.js';
 
 const previewArea = document.getElementById('preview-area');
 const video = document.getElementById('preview');
@@ -67,6 +70,9 @@ const autoCalFailDialog = /** @type {HTMLDialogElement} */ (
 const kbdCaptureHiRes = document.getElementById('kbd-capture-hi-res');
 const kbdCaptureMeasurements = document.getElementById('kbd-capture-measurements');
 const kbdCancelBurst = document.getElementById('kbd-cancel-burst');
+const toggleObjectDetect = /** @type {HTMLInputElement | null} */ (
+  document.getElementById('toggle-object-detect')
+);
 
 /** @type {import('./camera.js').CameraHandle | null} */
 let cameraHandle = null;
@@ -215,6 +221,11 @@ function hideError() {
  */
 function setCameraActive(active) {
   cameraActive = active;
+  if (active) {
+    objectDetect.resume();
+  } else {
+    objectDetect.pause();
+  }
   renderUiState();
   updateCameraIdleLayer();
 }
@@ -241,6 +252,7 @@ function exitAutoCalReview() {
   autoCalStill.removeAttribute('src');
   autoCalStill.classList.add('hidden');
   video.classList.remove('hidden');
+  if (cameraActive) objectDetect.resume();
 }
 
 /**
@@ -255,6 +267,7 @@ function enterAutoCalReview(objectUrl, result, mediaW, mediaH) {
   autoCalStillUrl = objectUrl;
   autoCalMediaW = mediaW;
   autoCalMediaH = mediaH;
+  objectDetect.pause();
   // Keep the <img> hidden: Chrome's object-fit letterboxing for <img> vs <video>
   // can disagree. Freeze frame + marks are both drawn on the overlay canvas.
   autoCalStill.classList.add('hidden');
@@ -347,6 +360,25 @@ function drawLabeledCenter(ctx, x, y, label, color) {
   ctx.fillText(label, x + 8, y - 8);
 }
 
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {import('./object-detect.js').NormRect} box
+ */
+function drawObjectBox(ctx, box) {
+  const vr = getVideoContentRect(previewArea, video);
+  if (!vr.width || !vr.height) return;
+  const x = vr.left + box.nx * vr.width;
+  const y = vr.top + box.ny * vr.height;
+  const w = box.nw * vr.width;
+  const h = box.nh * vr.height;
+  ctx.save();
+  ctx.strokeStyle = '#4ade80';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([]);
+  ctx.strokeRect(x, y, w, h);
+  ctx.restore();
+}
+
 function redraw() {
   const ctx = syncCanvasSize(overlay, previewArea);
   if (!ctx) return;
@@ -355,8 +387,28 @@ function redraw() {
     drawAutoCalMatch(ctx, pendingAutoCal.match);
     return;
   }
+  const objectBox = objectDetect.getBox();
+  if (objectBox) drawObjectBox(ctx, objectBox);
   calibration.draw(ctx);
   measurement.draw(ctx);
+}
+
+const objectDetect = createObjectDetectController({
+  video,
+  intervalMs: 1000,
+  onUpdate: (box) => {
+    if (box) calibration.ensureScaleBarInsideBox(box);
+    redraw();
+  },
+});
+
+if (toggleObjectDetect) {
+  toggleObjectDetect.addEventListener('change', () => {
+    objectDetect.setEnabled(toggleObjectDetect.checked);
+    if (!cameraActive || autoCalReviewing) {
+      objectDetect.pause();
+    }
+  });
 }
 
 const calibration = createCalibrationController({
@@ -445,6 +497,10 @@ function renderUiState() {
   kbdCaptureHiRes.disabled = !canUseControls || busy;
   kbdCaptureMeasurements.disabled = !canUseControls || phase !== 'calibrated' || busy;
   kbdCancelBurst.disabled = !canUseControls || !burstInProgress;
+
+  if (toggleObjectDetect) {
+    toggleObjectDetect.disabled = !canUseControls || busy;
+  }
 }
 
 setupOverlayResize(overlay, previewArea, video, redraw);
@@ -646,8 +702,24 @@ function filenameForRawBlob(blob) {
 
 /**
  * @param {Blob} blob
+ * @returns {Promise<Blob>}
+ */
+async function maybeCropToObjectBox(blob) {
+  const box = objectDetect.getBox();
+  if (!box || box.nw <= 0 || box.nh <= 0) return blob;
+  return cropBlobToNormRect(blob, box);
+}
+
+/**
+ * @param {Blob} blob
  */
 async function saveRawCapture(blob) {
+  const box = objectDetect.getBox();
+  if (box && box.nw > 0 && box.nh > 0) {
+    const cropped = await cropBlobToNormRect(blob, box);
+    await saveBlobToDirectory(null, cropped, timestampFilename());
+    return;
+  }
   await saveBlobToDirectory(null, blob, filenameForRawBlob(blob));
 }
 
@@ -656,7 +728,7 @@ async function saveRawCapture(blob) {
  */
 async function exportCaptureWithMeasurements(rawBlob) {
   const px = calibration.getPxPerMm();
-  const finalBlob = await composePngWithScaleBar(rawBlob, px, {
+  let finalBlob = await composePngWithScaleBar(rawBlob, px, {
     withMeasurements: true,
     measurements: measurement.getLines(),
     measurementRefIndex: measurement.getRefIndex(),
@@ -664,6 +736,7 @@ async function exportCaptureWithMeasurements(rawBlob) {
     scaleBarAnchor: calibration.getScaleBarAnchor(),
     calibrationMode: calibration.getSource(),
   });
+  finalBlob = await maybeCropToObjectBox(finalBlob);
   await saveBlobToDirectory(null, finalBlob, timestampFilename());
 }
 
@@ -683,10 +756,11 @@ async function doCaptureHiRes() {
         isCancelled: () => burstCancelled,
         onFrame: async (i, blob) => {
           flashCapture();
+          const out = await maybeCropToObjectBox(blob);
           const base = timestampFilename().replace(/\.png$/i, '');
-          const ext = blob.type === 'image/jpeg' ? 'jpg' : 'png';
+          const ext = out.type === 'image/jpeg' ? 'jpg' : 'png';
           const name = `${base}_${String(i + 1).padStart(2, '0')}.${ext}`;
-          await saveBlobToDirectory(null, blob, name);
+          await saveBlobToDirectory(null, out, name);
         },
       });
     } catch (e) {

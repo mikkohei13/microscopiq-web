@@ -237,6 +237,47 @@ function drawMeasurementsOnCanvas(
 }
 
 /**
+ * Crop an image blob to a normalized rect (0–1 of full frame). Returns PNG.
+ * @param {Blob} imageBlob
+ * @param {{ nx: number, ny: number, nw: number, nh: number }} box
+ * @returns {Promise<Blob>}
+ */
+export async function cropBlobToNormRect(imageBlob, box) {
+  const bitmap = await createImageBitmap(imageBlob);
+  const width = bitmap.width;
+  const height = bitmap.height;
+  let sx = Math.round(box.nx * width);
+  let sy = Math.round(box.ny * height);
+  let sw = Math.round(box.nw * width);
+  let sh = Math.round(box.nh * height);
+  sx = clamp(sx, 0, Math.max(0, width - 1));
+  sy = clamp(sy, 0, Math.max(0, height - 1));
+  sw = clamp(sw, 1, width - sx);
+  sh = clamp(sh, 1, height - sy);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = sw;
+  canvas.height = sh;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    bitmap.close();
+    throw new Error('Canvas unsupported');
+  }
+  ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh);
+  bitmap.close();
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (b) => {
+        if (b) resolve(b);
+        else reject(new Error('PNG encode failed'));
+      },
+      'image/png',
+      1
+    );
+  });
+}
+
+/**
  * @returns {string}
  */
 export function timestampFilename() {

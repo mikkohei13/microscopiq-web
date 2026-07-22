@@ -160,6 +160,43 @@ export function createCalibrationController(options) {
     };
   }
 
+  /**
+   * If the ~1 mm bar is not fully inside `box`, move it to the box bottom-left.
+   * No-op while dragging or when already inside. Returns true if the anchor moved.
+   * @param {{ nx: number, ny: number, nw: number, nh: number }} box
+   * @returns {boolean}
+   */
+  function ensureScaleBarInsideBox(box) {
+    if (phase !== 'calibrated' || pxPerMm == null || !scaleBarAnchor) return false;
+    if (scaleBarDragging) return false;
+    if (!box || box.nw <= 0 || box.nh <= 0) return false;
+    const vw = video.videoWidth;
+    if (!vw) return false;
+    const barLenNorm = pxPerMm / vw;
+    if (!(barLenNorm > 0)) return false;
+
+    const nxMax = Math.max(0, 1 - barLenNorm);
+    const nxLeft = clamp(scaleBarAnchor.nx, 0, nxMax);
+    const nyBase = clamp(scaleBarAnchor.ny, 0, 1);
+    const nxRight = nxLeft + barLenNorm;
+    const boxRight = box.nx + box.nw;
+    const boxBottom = box.ny + box.nh;
+    const fullyInside =
+      nxLeft >= box.nx &&
+      nxRight <= boxRight &&
+      nyBase >= box.ny &&
+      nyBase <= boxBottom;
+    if (fullyInside) return false;
+
+    const marginX = Math.min(0.02, box.nw * 0.08);
+    const marginY = Math.min(0.02, box.nh * 0.08);
+    const nxMaxInBox = Math.max(box.nx, boxRight - barLenNorm);
+    const nx = clamp(box.nx + marginX, box.nx, nxMaxInBox);
+    const ny = clamp(boxBottom - marginY, box.ny, boxBottom);
+    scaleBarAnchor = { nx: clamp(nx, 0, nxMax), ny: clamp(ny, 0, 1) };
+    return true;
+  }
+
   function isScaleBarDragging() {
     return scaleBarDragging;
   }
@@ -431,6 +468,7 @@ export function createCalibrationController(options) {
     getSource,
     getKnownMm,
     getScaleBarAnchor,
+    ensureScaleBarInsideBox,
     isScaleBarDragging,
     hitTestScaleBar,
     tryScaleBarPointerDown,

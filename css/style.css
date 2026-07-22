@@ -237,6 +237,20 @@ body {
   font-size: 0.875rem;
 }
 
+.toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-label input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: #508cff;
+}
+
 input[type="number"] {
   width: 4.5rem;
   padding: 0.25rem 0.35rem;
