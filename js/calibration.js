@@ -13,17 +13,21 @@ import {
 const HANDLE_RADIUS = 10;
 
 /** @typedef {'inactive' | 'adjusting' | 'calibrated'} CalibrationPhase */
+/** @typedef {'manual' | 'auto' | null} CalibrationSource */
 
 export function createCalibrationController(options) {
   const {
     container,
     video,
+    scaleBarLabel,
     onStateChange,
     onRedraw,
   } = options;
 
   /** @type {CalibrationPhase} */
   let phase = 'inactive';
+  /** @type {CalibrationSource} */
+  let source = null;
   /** @type {number} */
   let knownMm = 10;
   /** @type {{ nx1: number, ny1: number, nx2: number, ny2: number }} */
@@ -79,6 +83,19 @@ export function createCalibrationController(options) {
       return;
     }
     pxPerMm = d / knownMm;
+    source = 'manual';
+    placeDefaultScaleBarAnchor();
+    setPhase('calibrated');
+  }
+
+  /**
+   * Apply scale from auto-calibration (after user approval).
+   * @param {number} px
+   */
+  function applyAuto(px) {
+    if (!(px > 0)) return;
+    pxPerMm = px;
+    source = 'auto';
     placeDefaultScaleBarAnchor();
     setPhase('calibrated');
   }
@@ -100,9 +117,11 @@ export function createCalibrationController(options) {
 
   function clearCalibration() {
     pxPerMm = null;
+    source = null;
     scaleBarAnchor = null;
     scaleBarDragging = false;
     scaleBarPointerId = null;
+    hideScaleBarLabel();
     setPhase('inactive');
   }
 
@@ -112,6 +131,11 @@ export function createCalibrationController(options) {
 
   function getPhase() {
     return phase;
+  }
+
+  /** @returns {CalibrationSource} */
+  function getSource() {
+    return source;
   }
 
   function getKnownMm() {
@@ -278,12 +302,39 @@ export function createCalibrationController(options) {
     }
   }
 
+  function hideScaleBarLabel() {
+    if (!scaleBarLabel) return;
+    scaleBarLabel.classList.add('hidden');
+    scaleBarLabel.setAttribute('aria-hidden', 'true');
+  }
+
+  /**
+   * Position the DOM ~1 mm label; bar line is drawn on canvas.
+   * @param {ReturnType<typeof getVideoContentRect>} vr
+   * @param {number} pxPerMmVal
+   * @param {number} x0
+   * @param {number} y
+   */
+  function updateScaleBarLabel(vr, pxPerMmVal, x0, y) {
+    if (!scaleBarLabel || phase !== 'calibrated' || !source) {
+      hideScaleBarLabel();
+      return;
+    }
+    const modeEl = scaleBarLabel.querySelector('.scale-bar-mode');
+    if (modeEl) modeEl.textContent = source;
+    scaleBarLabel.style.left = `${x0}px`;
+    scaleBarLabel.style.top = `${y - 8}px`;
+    scaleBarLabel.classList.remove('hidden');
+    scaleBarLabel.setAttribute('aria-hidden', 'false');
+  }
+
   /**
    * @param {CanvasRenderingContext2D} ctx
    */
   function draw(ctx) {
     const vr = getVideoContentRect(container, video);
     if (phase === 'adjusting') {
+      hideScaleBarLabel();
       const p1 = normalizedToClientPixels(line.nx1, line.ny1, container, video);
       const p2 = normalizedToClientPixels(line.nx2, line.ny2, container, video);
       ctx.save();
@@ -316,22 +367,29 @@ export function createCalibrationController(options) {
       ctx.fillText(label, mx, my - 7);
 
       ctx.restore();
+      return;
     }
 
     if (phase === 'calibrated' && pxPerMm != null) {
       drawDualReferenceLine(ctx, vr, pxPerMm);
+    } else {
+      hideScaleBarLabel();
     }
   }
 
   /**
    * ~1 mm dual reference (white bar with black outline) on video content.
+   * Label text is a DOM element so the mode can be styled with CSS.
    * @param {CanvasRenderingContext2D} ctx
    * @param {ReturnType<typeof getVideoContentRect>} vr
    * @param {number} pxPerMmVal
    */
   function drawDualReferenceLine(ctx, vr, pxPerMmVal) {
     const len = mmToOverlayPixels(pxPerMmVal, 1, vr);
-    if (len < 4) return;
+    if (len < 4) {
+      hideScaleBarLabel();
+      return;
+    }
     const margin = 16;
     let nxLeft = scaleBarAnchor?.nx;
     let nyBase = scaleBarAnchor?.ny;
@@ -358,19 +416,19 @@ export function createCalibrationController(options) {
     ctx.moveTo(x0, y);
     ctx.lineTo(x1, y);
     ctx.stroke();
-    ctx.fillStyle = '#fff';
-    ctx.font = '12px system-ui, sans-serif';
-    ctx.fillText('~1 mm', x0, y - 8);
     ctx.restore();
+    updateScaleBarLabel(vr, pxPerMmVal, x0, y);
   }
 
   return {
     startAdjusting,
     cancel,
     finish,
+    applyAuto,
     clearCalibration,
     getPxPerMm,
     getPhase,
+    getSource,
     getKnownMm,
     getScaleBarAnchor,
     isScaleBarDragging,

@@ -10,7 +10,11 @@
   <div id="app">
     <div id="preview-area">
       <video id="preview" autoplay muted playsinline></video>
+      <img id="auto-cal-still" class="hidden" alt="" />
       <canvas id="overlay" aria-label="Calibration and measurement overlay"></canvas>
+      <div id="scale-bar-label" class="scale-bar-label hidden" aria-hidden="true">
+        ~1 mm <span class="scale-bar-mode"></span>
+      </div>
       <div id="camera-idle-layer" class="camera-idle-layer" role="region" aria-label="Camera">
         <div class="camera-idle-inner">
           <p id="camera-idle-headline" class="camera-idle-headline">Start the camera to begin.</p>
@@ -50,10 +54,15 @@
         <label>Frames <input type="number" id="burst-count" min="1" max="30" value="5" /></label>
         <label>Interval (s) <input type="number" id="burst-interval" min="1" max="3" step="0.1" value="1" /></label>
       </div>
-      <div class="control-group">
-        <button type="button" id="btn-calibrate">Calibrate</button>
+      <div class="control-group" role="group" aria-label="Calibration">
+        <span class="label">Calibrate:</span>
+        <button type="button" id="btn-calibrate-manual">Manually</button>
+        <button type="button" id="btn-calibrate-auto">Auto</button>
+        <button type="button" id="btn-clear-calibration" disabled>Clear scale</button>
         <button type="button" id="btn-calibration-done" class="hidden">Calibration done</button>
         <button type="button" id="btn-calibration-cancel" class="hidden">Cancel calibration</button>
+        <button type="button" id="btn-auto-cal-approve" class="hidden">Approve</button>
+        <button type="button" id="btn-auto-cal-cancel" class="hidden">Cancel</button>
       </div>
       <div class="control-group">
         <span class="label">Measurements:</span>
@@ -76,7 +85,7 @@
 
   <dialog id="calibration-dialog">
     <form id="calibration-form">
-      <h2>Calibration</h2>
+      <h2>Manual calibration</h2>
       <p>Enter the known distance (in millimeters) that you will align the line to.</p>
       <label>
         Distance (mm)
@@ -96,11 +105,20 @@
       <div class="dialog-actions">
         <button type="submit" value="start" id="calibration-start-btn">Start calibration</button>
         <button type="button" value="cancel" id="calibration-dialog-cancel">Cancel</button>
-        <button type="button" id="btn-clear-calibration" disabled>Clear scale</button>
       </div>
     </form>
   </dialog>
 
-  <script type="module" src="js/app.js?v=7"></script>
+  <dialog id="auto-cal-fail-dialog">
+    <form method="dialog">
+      <h2>Auto calibration</h2>
+      <p>Auto-calibration scale not found, please try again</p>
+      <div class="dialog-actions">
+        <button type="submit" value="ok">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/app.js?v=8"></script>
 </body>
 </html>

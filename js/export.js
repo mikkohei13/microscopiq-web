@@ -14,8 +14,9 @@ import { computeMeasurementLabelPlacements } from './measurement-label-layout.js
  * @param {number} height
  * @param {number} pxPerMm
  * @param {{ nx: number, ny: number } | null | undefined} [anchor] Normalized left baseline (0–1); omit for default corner placement.
+ * @param {'manual' | 'auto' | null | undefined} [mode]
  */
-export function drawScaleBarOnCanvas(ctx, width, height, pxPerMm, anchor) {
+export function drawScaleBarOnCanvas(ctx, width, height, pxPerMm, anchor, mode) {
   const barLen = pxPerMm * 1;
   if (barLen < 4) return;
   const margin = Math.round(Math.min(width, height) * 0.02);
@@ -58,7 +59,7 @@ export function drawScaleBarOnCanvas(ctx, width, height, pxPerMm, anchor) {
   ctx.strokeStyle = '#000';
   ctx.lineWidth = 2;
   ctx.font = `${fontSize}px system-ui, sans-serif`;
-  const text = '~1 mm';
+  const text = mode === 'manual' || mode === 'auto' ? `~1 mm ${mode}` : '~1 mm';
   ctx.strokeText(text, x0, y - fontSize * 0.5);
   ctx.fillText(text, x0, y - fontSize * 0.5);
   ctx.restore();
@@ -71,7 +72,7 @@ function clamp(v, min, max) {
 /**
  * @param {Blob} imageBlob
  * @param {number | null} pxPerMm Source pixels per mm.
- * @param {{ withMeasurements?: boolean, measurements?: NormSegment[], measurementRefIndex?: number, measurementRelative?: boolean, scaleBarAnchor?: { nx: number, ny: number } | null }} [options]
+ * @param {{ withMeasurements?: boolean, measurements?: NormSegment[], measurementRefIndex?: number, measurementRelative?: boolean, scaleBarAnchor?: { nx: number, ny: number } | null, calibrationMode?: 'manual' | 'auto' | null }} [options]
  * @returns {Promise<Blob>}
  */
 export async function composePngWithScaleBar(imageBlob, pxPerMm, options = {}) {
@@ -81,6 +82,7 @@ export async function composePngWithScaleBar(imageBlob, pxPerMm, options = {}) {
     measurementRefIndex = -1,
     measurementRelative = false,
     scaleBarAnchor = null,
+    calibrationMode = null,
   } = options;
   const bitmap = await createImageBitmap(imageBlob);
   const width = bitmap.width;
@@ -93,7 +95,7 @@ export async function composePngWithScaleBar(imageBlob, pxPerMm, options = {}) {
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
   if (pxPerMm != null && pxPerMm > 0) {
-    drawScaleBarOnCanvas(ctx, width, height, pxPerMm, scaleBarAnchor);
+    drawScaleBarOnCanvas(ctx, width, height, pxPerMm, scaleBarAnchor, calibrationMode);
   }
   if (withMeasurements && measurements.length > 0) {
     drawMeasurementsOnCanvas(

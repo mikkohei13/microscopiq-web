@@ -7,19 +7,22 @@ import {
   runBurst,
   describeError,
 } from './camera.js';
-import { setupOverlayResize, syncCanvasSize } from './overlay.js';
+import { setupOverlayResize, syncCanvasSize, getVideoContentRect } from './overlay.js';
 import { createCalibrationController } from './calibration.js';
 import { createMeasurementController } from './measurement.js?v=6';
 import {
   composePngWithScaleBar,
   timestampFilename,
   saveBlobToDirectory,
-} from './export.js?v=6';
+} from './export.js?v=7';
 import { readBurstSettings, writeBurstSettings } from './settings.js';
+import { autoCalibrate, blobToImageData } from './auto-calibrate.js';
 
 const previewArea = document.getElementById('preview-area');
 const video = document.getElementById('preview');
+const autoCalStill = /** @type {HTMLImageElement} */ (document.getElementById('auto-cal-still'));
 const overlay = document.getElementById('overlay');
+const scaleBarLabel = document.getElementById('scale-bar-label');
 const cameraIdleLayer = document.getElementById('camera-idle-layer');
 const cameraIdleHeadline = document.getElementById('camera-idle-headline');
 const cameraIdleDetail = document.getElementById('camera-idle-detail');
@@ -28,9 +31,12 @@ const errorOverlay = document.getElementById('error-overlay');
 const captureFlash = document.getElementById('capture-flash');
 
 const CAMERA_START_TIMEOUT_MS = 14000;
-const btnCalibrate = document.getElementById('btn-calibrate');
+const btnCalibrateManual = document.getElementById('btn-calibrate-manual');
+const btnCalibrateAuto = document.getElementById('btn-calibrate-auto');
 const btnCalibrationDone = document.getElementById('btn-calibration-done');
 const btnCalibrationCancel = document.getElementById('btn-calibration-cancel');
+const btnAutoCalApprove = document.getElementById('btn-auto-cal-approve');
+const btnAutoCalCancel = document.getElementById('btn-auto-cal-cancel');
 const btnClearCalibration = document.getElementById('btn-clear-calibration');
 const btnClearMeasurements = document.getElementById('btn-clear-measurements');
 const btnDeleteMeasurement = document.getElementById('btn-delete-measurement');
@@ -50,6 +56,9 @@ const calibrationDialog = document.getElementById('calibration-dialog');
 const calibrationForm = document.getElementById('calibration-form');
 const calibrationMmInput = document.getElementById('calibration-mm');
 const calibrationDialogCancel = document.getElementById('calibration-dialog-cancel');
+const autoCalFailDialog = /** @type {HTMLDialogElement} */ (
+  document.getElementById('auto-cal-fail-dialog')
+);
 
 const kbdCaptureHiRes = document.getElementById('kbd-capture-hi-res');
 const kbdCaptureMeasurements = document.getElementById('kbd-capture-measurements');
@@ -64,6 +73,13 @@ let cameraActive = false;
 let cameraStarting = false;
 let burstCancelled = false;
 let burstInProgress = false;
+
+/** Auto-cal review: frozen still + pending result (not a calibration phase). */
+let autoCalReviewing = false;
+/** @type {import('./auto-calibrate.js').AutoCalResult | null} */
+let pendingAutoCal = null;
+/** @type {string | null} */
+let autoCalStillUrl = null;
 
 /** @type {string | null} */
 let lastCameraStartError = null;
@@ -205,10 +221,109 @@ function flashCapture() {
   });
 }
 
+function exitAutoCalReview() {
+  autoCalReviewing = false;
+  pendingAutoCal = null;
+  if (autoCalStillUrl) {
+    URL.revokeObjectURL(autoCalStillUrl);
+    autoCalStillUrl = null;
+  }
+  autoCalStill.removeAttribute('src');
+  autoCalStill.classList.add('hidden');
+  video.classList.remove('hidden');
+}
+
+/**
+ * @param {string} objectUrl
+ * @param {import('./auto-calibrate.js').AutoCalResult} result
+ */
+function enterAutoCalReview(objectUrl, result) {
+  autoCalReviewing = true;
+  pendingAutoCal = result;
+  autoCalStillUrl = objectUrl;
+  autoCalStill.src = objectUrl;
+  autoCalStill.classList.remove('hidden');
+  video.classList.add('hidden');
+  if (scaleBarLabel) {
+    scaleBarLabel.classList.add('hidden');
+    scaleBarLabel.setAttribute('aria-hidden', 'true');
+  }
+  renderUiState();
+  redraw();
+}
+
+/**
+ * Draw Large A / Large B / Reference marks for auto-cal review.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {import('./auto-cal-match.js').PatternMatch} match
+ */
+function drawAutoCalMatch(ctx, match) {
+  const vr = getVideoContentRect(previewArea, video);
+  const vw = vr.videoWidth || video.videoWidth;
+  const vh = vr.videoHeight || video.videoHeight;
+  if (!vw || !vh || !vr.width) return;
+
+  const toX = (sx) => vr.left + (sx / vw) * vr.width;
+  const toY = (sy) => vr.top + (sy / vh) * vr.height;
+
+  const x1 = toX(match.largeA.cx);
+  const y1 = toY(match.largeA.cy);
+  const x2 = toX(match.largeB.cx);
+  const y2 = toY(match.largeB.cy);
+
+  ctx.save();
+  ctx.strokeStyle = '#ffd166';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+
+  drawLabeledCenter(ctx, x1, y1, 'Large A', '#ffd166');
+  drawLabeledCenter(ctx, x2, y2, 'Large B', '#ffd166');
+  if (match.reference) {
+    drawLabeledCenter(
+      ctx,
+      toX(match.reference.cx),
+      toY(match.reference.cy),
+      'Reference',
+      '#4cc9f0'
+    );
+  }
+  ctx.restore();
+}
+
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} x
+ * @param {number} y
+ * @param {string} label
+ * @param {string} color
+ */
+function drawLabeledCenter(ctx, x, y, label, color) {
+  ctx.fillStyle = color;
+  ctx.strokeStyle = '#111';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.font = '12px system-ui, sans-serif';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+  ctx.strokeText(label, x + 8, y - 8);
+  ctx.fillStyle = color;
+  ctx.fillText(label, x + 8, y - 8);
+}
+
 function redraw() {
   const ctx = syncCanvasSize(overlay, previewArea);
   if (!ctx) return;
   ctx.clearRect(0, 0, previewArea.clientWidth, previewArea.clientHeight);
+  if (autoCalReviewing && pendingAutoCal) {
+    drawAutoCalMatch(ctx, pendingAutoCal.match);
+    return;
+  }
   calibration.draw(ctx);
   measurement.draw(ctx);
 }
@@ -216,6 +331,7 @@ function redraw() {
 const calibration = createCalibrationController({
   container: previewArea,
   video,
+  scaleBarLabel,
   onStateChange: onCalibrationStateChange,
   onRedraw: redraw,
 });
@@ -236,30 +352,38 @@ function onCalibrationStateChange() {
 function renderUiState() {
   const phase = calibration.getPhase();
   const isAdjusting = phase === 'adjusting';
+  const isReviewing = autoCalReviewing;
+  const busy = isAdjusting || isReviewing;
   const canUseControls = cameraActive;
 
   modeRadios.forEach((r) => {
-    r.disabled = !canUseControls;
+    r.disabled = !canUseControls || busy;
   });
   if (modeRow) {
-    modeRow.classList.toggle('is-disabled', !canUseControls);
-    modeRow.setAttribute('aria-disabled', canUseControls ? 'false' : 'true');
+    modeRow.classList.toggle('is-disabled', !canUseControls || busy);
+    modeRow.setAttribute('aria-disabled', canUseControls && !busy ? 'false' : 'true');
   }
-  burstCountInput.disabled = !canUseControls;
-  burstIntervalInput.disabled = !canUseControls;
+  burstCountInput.disabled = !canUseControls || busy;
+  burstIntervalInput.disabled = !canUseControls || busy;
 
-  btnCalibrationDone.classList.toggle('hidden', phase !== 'adjusting');
-  btnCalibrationCancel.classList.toggle('hidden', phase !== 'adjusting');
+  btnCalibrationDone.classList.toggle('hidden', !isAdjusting);
+  btnCalibrationCancel.classList.toggle('hidden', !isAdjusting);
   btnCalibrationDone.disabled = !canUseControls || !isAdjusting;
   btnCalibrationCancel.disabled = !canUseControls || !isAdjusting;
-  btnCalibrate.disabled = !canUseControls || isAdjusting;
 
-  const isCalibrated = phase === 'calibrated';
-  btnClearCalibration.disabled =
-    !canUseControls || !isCalibrated || isAdjusting;
+  btnAutoCalApprove.classList.toggle('hidden', !isReviewing);
+  btnAutoCalCancel.classList.toggle('hidden', !isReviewing);
+  btnAutoCalApprove.disabled = !canUseControls || !isReviewing;
+  btnAutoCalCancel.disabled = !canUseControls || !isReviewing;
+
+  btnCalibrateManual.disabled = !canUseControls || busy;
+  btnCalibrateAuto.disabled = !canUseControls || busy || burstInProgress;
+
+  const isCalibrated = phase === 'calibrated' && !isReviewing;
+  btnClearCalibration.disabled = !canUseControls || !isCalibrated || busy;
 
   const shouldMeasureBeActive =
-    canUseControls && !isAdjusting && isCalibrated;
+    canUseControls && !busy && phase === 'calibrated';
   measurement.setActive(shouldMeasureBeActive);
   overlay.classList.toggle('calibration-cursor', isAdjusting);
   overlay.classList.toggle('measure-cursor', shouldMeasureBeActive);
@@ -269,7 +393,7 @@ function renderUiState() {
       ? 'Switch to mm'
       : 'Switch to relative';
   }
-  if (calibration.getPhase() !== 'calibrated') {
+  if (phase !== 'calibrated' || isReviewing) {
     overlay.classList.remove('scale-bar-cursor', 'scale-bar-dragging');
   }
 
@@ -278,17 +402,17 @@ function renderUiState() {
   btnDeleteMeasurement.disabled =
     !canUseControls || !isCalibrated || !measurement.hasSelection();
 
-  const canCapture = canUseControls && !burstInProgress;
+  const canCapture = canUseControls && !burstInProgress && !busy;
   btnCaptureHiRes.disabled = !canCapture;
-  btnCaptureMeasurements.classList.toggle('hidden', !isCalibrated);
-  btnCaptureMeasurements.disabled = !canCapture || !isCalibrated;
+  btnCaptureMeasurements.classList.toggle('hidden', phase !== 'calibrated' || isReviewing);
+  btnCaptureMeasurements.disabled = !canCapture || phase !== 'calibrated';
 
   normalCaptureButtons.classList.toggle('hidden', burstInProgress);
   btnCancelBurst.classList.toggle('hidden', !burstInProgress);
   btnCancelBurst.disabled = !canUseControls || !burstInProgress;
 
-  kbdCaptureHiRes.disabled = !canUseControls;
-  kbdCaptureMeasurements.disabled = !canUseControls || !isCalibrated;
+  kbdCaptureHiRes.disabled = !canUseControls || busy;
+  kbdCaptureMeasurements.disabled = !canUseControls || phase !== 'calibrated' || busy;
   kbdCancelBurst.disabled = !canUseControls || !burstInProgress;
 }
 
@@ -330,8 +454,8 @@ btnStartCenter.addEventListener('click', () => {
   void tryStartCamera();
 });
 
-btnCalibrate.addEventListener('click', () => {
-  if (!cameraHandle?.stream) return;
+btnCalibrateManual.addEventListener('click', () => {
+  if (!cameraHandle?.stream || autoCalReviewing) return;
   hideError();
   calibrationMmInput.value = '';
   calibrationDialog.showModal();
@@ -363,12 +487,52 @@ btnCalibrationCancel.addEventListener('click', () => {
   redraw();
 });
 
+btnCalibrateAuto.addEventListener('click', () => {
+  void runAutoCalibration();
+});
+
+btnAutoCalApprove.addEventListener('click', () => {
+  if (!pendingAutoCal) return;
+  const px = pendingAutoCal.pxPerMm;
+  exitAutoCalReview();
+  calibration.applyAuto(px);
+  redraw();
+});
+
+btnAutoCalCancel.addEventListener('click', () => {
+  exitAutoCalReview();
+  renderUiState();
+  redraw();
+});
+
+async function runAutoCalibration() {
+  if (!cameraHandle?.stream || autoCalReviewing || burstInProgress) return;
+  if (calibration.getPhase() === 'adjusting') return;
+  hideError();
+
+  try {
+    flashCapture();
+    const blob = await captureStillFromVideoElement(video);
+    const imageData = await blobToImageData(blob);
+    const result = autoCalibrate(imageData);
+    if (!result) {
+      autoCalFailDialog.showModal();
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    enterAutoCalReview(url, result);
+  } catch (e) {
+    showError(describeError(e) || 'Auto calibration failed');
+  }
+}
+
 btnClearCalibration.addEventListener('click', () => {
   if (btnClearCalibration.disabled) return;
+  exitAutoCalReview();
   calibration.clearCalibration();
   measurement.clear();
   hideError();
-  calibrationDialog.close();
+  redraw();
 });
 
 btnClearMeasurements.addEventListener('click', () => {
@@ -467,12 +631,13 @@ async function exportCaptureWithMeasurements(rawBlob) {
     measurementRefIndex: measurement.getRefIndex(),
     measurementRelative: measurement.isRelativeMode(),
     scaleBarAnchor: calibration.getScaleBarAnchor(),
+    calibrationMode: calibration.getSource(),
   });
   await saveBlobToDirectory(null, finalBlob, timestampFilename());
 }
 
 async function doCaptureHiRes() {
-  if (!cameraHandle?.stream || burstInProgress) return;
+  if (!cameraHandle?.stream || burstInProgress || autoCalReviewing) return;
   hideError();
 
   if (burstMode) {
@@ -512,7 +677,7 @@ async function doCaptureHiRes() {
 }
 
 async function doCaptureMeasurements() {
-  if (!cameraHandle?.stream || burstInProgress) return;
+  if (!cameraHandle?.stream || burstInProgress || autoCalReviewing) return;
   if (calibration.getPhase() !== 'calibrated') return;
   hideError();
 
@@ -559,9 +724,9 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.code === 'Enter' || e.key === 'Enter') {
     e.preventDefault();
-    if (e.shiftKey && calibration.getPhase() === 'calibrated') {
+    if (e.shiftKey && calibration.getPhase() === 'calibrated' && !autoCalReviewing) {
       kbdCaptureMeasurements.click();
-    } else {
+    } else if (!autoCalReviewing) {
       kbdCaptureHiRes.click();
     }
   }
@@ -579,7 +744,7 @@ document.addEventListener('keydown', (e) => {
  * @param {number} clientY
  */
 function updateOverlayScaleBarCursor(clientX, clientY) {
-  if (calibration.getPhase() === 'adjusting') {
+  if (autoCalReviewing || calibration.getPhase() === 'adjusting') {
     overlay.classList.remove('scale-bar-cursor', 'scale-bar-dragging');
     return;
   }
@@ -601,6 +766,7 @@ function updateOverlayScaleBarCursor(clientX, clientY) {
 }
 
 overlay.addEventListener('pointerdown', (e) => {
+  if (autoCalReviewing) return;
   if (calibration.getPhase() === 'adjusting') {
     calibration.onPointerDown(e);
   } else if (calibration.tryScaleBarPointerDown(e)) {
@@ -611,6 +777,7 @@ overlay.addEventListener('pointerdown', (e) => {
   }
 });
 overlay.addEventListener('pointermove', (e) => {
+  if (autoCalReviewing) return;
   if (calibration.getPhase() === 'adjusting') {
     calibration.onPointerMove(e);
   } else if (calibration.isScaleBarDragging()) {
@@ -622,6 +789,7 @@ overlay.addEventListener('pointermove', (e) => {
   updateOverlayScaleBarCursor(e.clientX, e.clientY);
 });
 overlay.addEventListener('pointerup', (e) => {
+  if (autoCalReviewing) return;
   if (calibration.getPhase() === 'adjusting') {
     calibration.onPointerUp(e);
   } else if (calibration.isScaleBarDragging()) {
@@ -633,6 +801,7 @@ overlay.addEventListener('pointerup', (e) => {
   updateOverlayScaleBarCursor(e.clientX, e.clientY);
 });
 overlay.addEventListener('pointercancel', (e) => {
+  if (autoCalReviewing) return;
   if (calibration.getPhase() === 'adjusting') {
     calibration.onPointerUp(e);
   } else if (calibration.isScaleBarDragging()) {
@@ -643,7 +812,7 @@ overlay.addEventListener('pointercancel', (e) => {
   }
   updateOverlayScaleBarCursor(e.clientX, e.clientY);
 });
-overlay.addEventListener('pointerleave', (e) => {
+overlay.addEventListener('pointerleave', () => {
   if (!calibration.isScaleBarDragging()) {
     overlay.classList.remove('scale-bar-cursor');
   }
