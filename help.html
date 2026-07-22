@@ -25,41 +25,38 @@
 
   <p><a href="https://github.com/mikkohei13/microscopiq-web">GitHub</a></p>
 
-  <p>Kuvaa mikroskoopilla selaimessa: näet kuvan reaaliajassa, voit kalibroida mittakaavan, tehdä mittauksia ja tallentaa kuvia PNG-muodossa.</p>
+  <p>Kuvaa mikroskooppikuvia selaimessasi: reaaliaikainen esikatselu, mittakaavan kalibrointi (manuaalinen tai automaattinen), mittaukset kuvasta (millimetrit tai suhteellinen) sekä PNG-vienti.</p>
 
   <h2>Kamera</h2>
-  <p>Klikkaa <strong>Start camera</strong> käynnistääksesi kameran. Lataa sivu uudelleen pysäyttääksesi kameran.</p>
-  <p>Jos kamera ei käynnisty, irrota kameran johto, kytke se takaisin, lataa sivu uudelleen ja tarkista, että sivustolla on oikeus käyttää kameraa.</p>
-
+  <p>Käynnistä kamera napsauttamalla <strong>Start camera</strong>. Pysäytä kamera lataamalla sivu uudelleen.</p>
+  <p>Jos kamera ei käynnisty, irrota USB-laite, kytke se takaisin, lataa sivu uudelleen ja tarkista sivuston kamerakäyttöoikeudet.</p>
+  
   <h2>Kalibrointi ja mittakaavajana</h2>
-  <p>Kalibroi mittakaava kohdasta <strong>Calibrate:</strong>. <strong>Manually</strong> avaa dialogin: syötä jonkin kuvassa näkyvän vertailukohteen (esim. viivaimen) pituus millimetreissä ja sovita keltainen viiva siihen. Kannattaa käyttää mahdollisimman suurta vertailukohdetta, jotta kalibrointi olisi tarkka.</p>
-  <p><strong>Auto</strong> ottaa esikatselusta yhden kuvan ja etsii kolmen ympyrän kalibrointikohteen. Jos kohde löytyy, tarkista merkinnät ja hyväksy tai peru. Jos kohdetta ei löydy, kokeile uudelleen.</p>
-  <p>Kalibroinnin jälkeen esikatselussa näkyy <strong>~1 mm</strong> mittakaavajana (merkintä <em>manual</em> tai <em>auto</em>). Voit raahata sen haluamaasi kohtaan. <strong>Clear scale</strong> poistaa kalibroinnin ja mittaukset.</p>
+  <p>Kalibroi:</strong> valitsemalla <strong>Manually</strong> voit syöttää kuvassa näkyvän vertailukohteen (esim. viivaimen) pituuden millimetreinä. Kohdista sitten keltainen viiva kyseiseen kohteeseen. Käytä mieluiten suurinta kuvaan mahtuvaa vertailukohdetta, jotta kalibrointi on tarkka.</p>
+  <p><strong>Auto</strong> ottaa kuvan ja etsii siitä kolmen ympyrän kalibrointikohteen. Jos kohde löytyy, tarkista merkinnät ja valitse Approve tai Cancel. <a href="./microscopiq_scale.svg">Lataa kalibrointimalli tästä</a> ja tulosta se A4-paperille (100 %:n koossa, ilman marginaaleja).</p>
+  <p>Kalibroinnin jälkeen kuvaan ilmestyy <strong>~1 mm</strong>:n mittakaavajana (merkintänä <em>manual</em> tai <em>auto</em>). Voit siirtää sen parempaan paikkaan raahaamalla. <strong>Clear scale</strong> poistaa kalibroinnin ja kaikki mittaukset.</p>
   
   <h2>Mittaukset</h2>
-  <p>Mittaustyökalut tulevat käyttöön kalibroinnin jälkeen. Piirrä mittausviiva hiirellä kuvan päälle. Valitsemalla viivan voit säätää sen päätepisteitä. <strong>Clear</strong> poistaa kaikki mittausviivat kerralla ja <strong>Delete selected</strong> vain valitun viivan.</p>
+  <p>Mittaukset ovat käytettävissä kalibroinnin jälkeen. Piirrä viiva raahaamalla kuvan päällä. Valitse viiva säätääksesi sen päätepisteitä. Poista kaikki mittausviivat napsauttamalla <strong>Clear all</strong> tai vain valittu viiva napsauttamalla <strong>Delete selected</strong>. Vaihtamalla <strong>Switch to relative</strong>-tilaan voit mitata kuvan kohteiden suhteellisia kokoja. Valitse vertailukohde napsauttamalla sitä – se saa arvon 1.</p>
   
   <h2>Kuvan tallennus</h2>
-  <p>Tallenna kuva PNG-tiedostona klikkaamalla <strong>Capture</strong>. Jos kalibrointi on käytössä, <strong>Capture with measurements</strong> tallentaa myös mittausviivat ja mittakaavajanan.</p>
-  <p><strong>Burst</strong>-tilassa voit ottaa useita kuvia peräkkäin ja määrittää kuvien lukumäärä ja väliajan. Keskeytä sarjakuvaus painamalla <strong>Cancel burst</strong> tai <strong>välilyönti</strong>-näppäintä.</p>
-
-  <p><strong>Hi-res -kuvan resoluutio</strong> riippuu käytettävästä mikroskoopista ja selaimesta. Käytännössä Chrome voi tallentaa suurempia kuvia kuin Firefox <strong>Capture measurements</strong> tallentaa aina samankokoisen kuvan kuin ruudulla näkyy, jotta mittaukset säilyvät täsmällisinä.</p>
-  
+  <p>Napsauta <strong>Capture measurements</strong> tai paina <code>Enter</code> tallentaaksesi PNG-kuvan, jossa näkyvät mittausviivat ja mittakaavajana, kun kalibrointi on käytössä. Napsauta <strong>Capture hi-res</strong> tallentaaksesi PNG-kuvan kameran täydellä resoluutiolla. Tämä riippuu kameran ja selaimen ominaisuuksista. Chrome tallentaa yleensä suurempia kuvia kuin Firefox, mutta on usein hitaampi.</p>
+  <p>Valitse <strong>Burst</strong>-tila ottaaksesi useita kuvia määritetyllä kuvamäärällä ja aikavälillä. Napsauta <strong>Cancel burst</strong> tai paina <strong>välilyöntiä</strong> kuvauksen aikana peruuttaaksesi loput sarjasta.</p>
   
   <h2>Pikanäppäimet</h2>
   <ul>
-    <li><code>Enter</code> — Ota kuva</li>
-    <li><code>Shift</code> + <code>Enter</code> — Ota kuva mittauksineen</li>
-    <li><code>Välilyönti</code> — Keskeytä sarjakuvaus</li>
+  <li><code>Enter</code>: Kaappaa mittauksineen</li>
+  <li><code>Shift</code> + <code>Enter</code>: Kaappaa tarkkana</li>
+  <li><code>Space</code>: Peruuta sarjakuvaus sen ollessa käynnissä</li>
   </ul>
-
-  <p><a href="proportions.html">Mittasuhdetyökalulla</a> voit mitata kuvan osien suhteita.</p>
-
+  
+  <p>Erillisellä <a href="proportions.html">mittasuhdetyökalulla</a> voit mitata kuvan kohteiden mittasuhteita.</p>
+  
   <p><a href="index.html">Takaisin sovellukseen</a></p>
 
   <hr>
 
-  <p>Capture microscope images in your browser with live preview, scale calibration, on-screen measurements, and PNG export.</p>
+  <p>Capture microscope images in your browser with live preview, scale calibration (manual or auto), on-screen measurements (millimeters or relative), and PNG export.</p>
 
   <h2>Camera</h2>
   <p>Click <strong>Start camera</strong> to start the camera. Reload the page to stop the camera.</p>
@@ -67,26 +64,24 @@
 
   <h2>Calibration and scale bar</h2>
   <p>Use <strong>Calibrate:</strong> <strong>Manually</strong> to open a dialog. Enter the length, in millimeters, of a visible reference object, such as a ruler. Then align the yellow line with that object. Preferably use the largest reference object that fits the image, so the calibration is accurate.</p>
-  <p><strong>Auto</strong> captures the current preview frame and looks for the printed three-circle calibration target. If found, review the marks and Approve or Cancel. If not found, try again.</p>
+  <p><strong>Auto</strong> captures the current preview frame and looks for the printed three-circle calibration target. If the target is found, review the marks and Approve or Cancel. <a href="./microscopiq_scale.svg">Download the target template here</a> and print it out on A4 paper (100% scale, no margins).</p>
   <p>After calibration, a <strong>~1 mm</strong> scale bar appears (labeled <em>manual</em> or <em>auto</em>). Drag it to a better position. <strong>Clear scale</strong> removes the calibration and all measurements.</p>
 
   <h2>Measurements</h2>
-  <p>Measurements are available after calibration. Drag on the image to draw a line. Select a line to adjust its endpoints. Click <strong>Clear</strong> to remove all measurement lines, or <strong>Delete selected</strong> to remove only the selected line.</p>
+  <p>Measurements are available after calibration. Drag on the image to draw a line. Select a line to adjust its endpoints. Click <strong>Clear</strong> to remove all measurement lines, or <strong>Delete selected</strong> to remove only the selected line. By switching to <strong>Relative</strong> mode, you can measure the relative size of objects in the image. Select the baseline object by clicking on it - it will get value of 1.</p>
 
   <h2>Capture</h2>
-  <p>Click <strong>Capture</strong> to save a PNG of the current frame. Click <strong>Capture with measurements</strong> to include measurement overlays and the scale bar when calibration is active.</p>
+  <p>Click <strong>Capture with measurements</strong> or press <code>Enter</code> to capture a PNG image with measurement overlays and the scale bar when calibration is active. Click <strong>Capture hi-res</strong> to save a PNG with the full resolution of the camera. This depends on the camera and browser capabilities. Chrome usually saves larger images than Firefox, but has tendency to be slower.</p>
   <p>Choose <strong>Burst</strong> mode to capture multiple frames with a set count and interval. Click <strong>Cancel burst</strong> or press <strong>Space</strong> during capture to cancel the rest of the burst.</p>
 
   <h2>Keyboard shortcuts</h2>
   <ul>
-    <li><code>Enter</code> — Capture</li>
-    <li><code>Shift</code> + <code>Enter</code> — Capture with measurements</li>
-    <li><code>Space</code> — Cancel burst while a burst is running</li>
+    <li><code>Enter</code>: Capture with measurements</li>
+    <li><code>Shift</code> + <code>Enter</code>: Capture hi-res</li>
+    <li><code>Space</code>: Cancel burst while a burst is running</li>
   </ul>
 
-  <p><strong>Resolution of hi-res</strong> photos depends on your microscope camera and which browser you use. The camera sets the maximum resolution; the browser decides how much of that can be saved. In practice, Chrome usually saves larger images than Firefox. <strong>Capture measurements</strong> always uses the same size as the preview, so measurement lines stay aligned.</p>
-
-  <p>With the <a href="proportions.html">proportions tool</a> you can measure the proportions of objects in an image.</p>
+  <p>With the standalone <a href="proportions.html">proportions tool</a> you can measure the proportions of objects in an image.</p>
 
   <p><a href="index.html">Back to app</a></p>
 </body>

@@ -26,7 +26,7 @@ Open [http://localhost:8080](http://localhost:8080) in your browser.
 
 - Target: three filled black circles on a bright background — two large circles **5 mm** center-to-center, plus a smaller reference circle offset **2.5 mm** from one large circle (used to orient A vs B). Geometry and detection thresholds live in [`js/auto-cal-constants.js`](js/auto-cal-constants.js).
 - **Auto** grabs the live preview via canvas (`drawImage` from `<video>`), not hi-res `ImageCapture`, so it works the same in all browsers.
-- Pipeline (pure JS, no OpenCV): downsample → grayscale → box blur → Otsu threshold (inverted) → connected-component blobs → filter by size/circularity/aspect → match two large + optional reference by spacing → `pxPerMm = pixelDistance / KNOWN_DISTANCE_MM`.
+- Pipeline (pure JS, no OpenCV): downsample → grayscale → box blur → Otsu threshold (inverted) → connected-component blobs → filter by circularity/aspect (wide absolute size bounds) → match two large + optional reference by diameter/spacing ratios (scale-invariant; no assumed FOV) → `pxPerMm = pixelDistance / KNOWN_DISTANCE_MM`.
 - On success, the frozen frame is shown with A/B/reference marks; **Approve** applies the scale (`source: 'auto'`), **Cancel** discards it. On failure, a dialog asks the user to try again.
 - Entry points: [`js/auto-calibrate.js`](js/auto-calibrate.js) (`autoCalibrate`), with preprocess / candidates / match split across the `js/auto-cal-*.js` modules.
 
