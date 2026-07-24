@@ -1,10 +1,10 @@
 # microscopiq-web
 
-Microscopiq is a browser-based microscope capture tool: live camera preview, scale calibration, measurements on the preview, and PNG export (plain or with overlays).
+Microscopiq is a browser-based microscope capture tool: live camera preview, automatic scale calibration, absolute and proportional measurements on the preview, optional automatic cropping, and PNG export (plain or with overlays).
 
-**Start camera** appears over the preview when the stream is off. There is no in-app stop; reload the page to reset the camera. **Calibrate: Manually** opens a dialog (known distance in mm, then align the yellow line). **Calibrate: Auto** captures the current preview frame and detects a printed three-circle target; the user approves or cancels the result. **Clear scale** removes calibration and measurements. *Clear measurements* removes all measurement lines; *Delete selected* removes the current selection. The on-screen ~1 mm scale bar can be dragged; exports use the same position. The bar is labeled `manual` or `auto` depending on how calibration was done.
+**Start camera** appears over the preview when the stream is off. Reload the page to reset the camera. **Manual calibration** opens a dialog (known distance in mm, then align the yellow line). **Automatic calibration** captures the current preview frame and detects a printed three-circle target; the user approves or cancels the result. **Clear scale** removes calibration and measurements. *Clear measurements* removes all measurement lines; *Delete selected* removes the current selection. The on-screen ~1 mm scale bar can be dragged; exports use the same position. The bar is labeled `manual` or `auto` depending on how calibration was done.
 
-Single or **burst** capture; burst frame count and interval are stored in `localStorage`. **[help.html](help.html)** has a short usage summary.
+Single or **burst** capture; burst frame count and interval are stored in `localStorage`. See **[help.html](help.html)** that has a short usage summary.
 
 ## Run locally
 
@@ -32,6 +32,11 @@ Open [http://localhost:8080](http://localhost:8080) in your browser.
 
 ## Improvement ideas
 
-- Draw an area on the view, and submit that to an AI model to get identification for the species.
-- Ability to enter HEX code for the measurement line color, persisted in browser storage.
-- Allow adjusting units of measurement (mm, μm)
+- Should have:
+    - Color confirm & cancel buttons to make them more distinct.
+    - Code review.
+- Nice to have:
+    - Allow relative measurement mode also when scale is not calibrated.
+    - Draw an area on the view, and submit that to an AI model to get identification for the species.
+    - Ability to enter HEX code for the measurement line color, persisted in browser storage.
+    - Allow adjusting units of measurement (mm, μm)
