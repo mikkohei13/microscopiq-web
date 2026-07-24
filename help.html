@@ -42,6 +42,9 @@
   <h2>Kuvan tallennus</h2>
   <p>Napsauta <strong>Capture measurements</strong> tai paina <code>Enter</code> tallentaaksesi PNG-kuvan, jossa näkyvät mittausviivat ja mittakaavajana, kun kalibrointi on käytössä. Napsauta <strong>Capture hi-res</strong> tallentaaksesi PNG-kuvan kameran täydellä resoluutiolla. Tämä riippuu kameran ja selaimen ominaisuuksista. Chrome tallentaa yleensä suurempia kuvia kuin Firefox, mutta on usein hitaampi.</p>
   <p>Valitse <strong>Burst</strong>-tila ottaaksesi useita kuvia määritetyllä kuvamäärällä ja aikavälillä. Napsauta <strong>Cancel burst</strong> tai paina <strong>välilyöntiä</strong> kuvauksen aikana peruuttaaksesi loput sarjasta.</p>
+
+  <h2>Automaattinen rajaus</h2>
+  <p>Kun <strong>Crop box</strong> on valittuna, sovellus näyttää havaitun kohteen ympärillä ruudun ja rajaa otetun kuvan sen mukaisesti.</p>
   
   <h2>Pikanäppäimet</h2>
   <ul>
@@ -63,8 +66,7 @@
   <p>If the camera does not start, unplug the USB device, plug it back in, reload the page, and check the site’s camera permissions.</p>
 
   <h2>Calibration and scale bar</h2>
-  <p>Use <strong>Calibrate:</strong> <strong>Manually</strong> to open a dialog. Enter the length, in millimeters, of a visible reference object, such as a ruler. Then align the yellow line with that object. Preferably use the largest reference object that fits the image, so the calibration is accurate.</p>
-  <p><strong>Auto</strong> captures the current preview frame and looks for the printed three-circle calibration target. If the target is found, review the marks and Approve or Cancel. <a href="./microscopiq_scale.svg">Download the target template here</a> and print it out on A4 paper (100% scale, no margins).</p>
+  <p>Use <strong>Calibrate:</strong> <strong>Auto</strong> captures the current preview frame and looks for the printed three-circle calibration target. If the target is found, review the marks and Approve or Cancel. <a href="./microscopiq_scale.svg">Download the target template here</a> and print it out on A4 paper (100% scale, no margins). <strong>Manually</strong> to open a dialog. Enter the length, in millimeters, of a visible reference object, such as a ruler. Then align the yellow line with that object. Preferably use the largest reference object that fits the image, so the calibration is accurate.</p>
   <p>After calibration, a <strong>~1 mm</strong> scale bar appears (labeled <em>manual</em> or <em>auto</em>). Drag it to a better position. <strong>Clear scale</strong> removes the calibration and all measurements.</p>
 
   <h2>Measurements</h2>
@@ -73,6 +75,10 @@
   <h2>Capture</h2>
   <p>Click <strong>Capture with measurements</strong> or press <code>Enter</code> to capture a PNG image with measurement overlays and the scale bar when calibration is active. Click <strong>Capture hi-res</strong> to save a PNG with the full resolution of the camera. This depends on the camera and browser capabilities. Chrome usually saves larger images than Firefox, but has tendency to be slower.</p>
   <p>Choose <strong>Burst</strong> mode to capture multiple frames with a set count and interval. Click <strong>Cancel burst</strong> or press <strong>Space</strong> during capture to cancel the rest of the burst.</p>
+
+  <h2>Automatic cropping</h2>
+  <p>When <strong>Crop box</strong> is selected, the app displays a box around the detected object and crops the captured image to the box.</p>
+  
 
   <h2>Keyboard shortcuts</h2>
   <ul>
