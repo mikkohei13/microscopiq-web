@@ -1,10 +1,14 @@
 # microscopiq-web
 
-Microscopiq is a browser-based microscope capture tool: live camera preview, automatic scale calibration, absolute and proportional measurements on the preview, optional automatic cropping, and PNG export (plain or with overlays).
+Microscopiq is a browser-based tool for capturing and measuring images from a microscope camera. It has live preview, automatic scale calibration, on-image measurements, and PNG export, all running locally in the browser with no installation required. You can try the app at https://www.biomi.org/microscopiq/
 
-**Start camera** appears over the preview when the stream is off. Reload the page to reset the camera. **Manual calibration** opens a dialog (known distance in mm, then align the yellow line). **Automatic calibration** captures the current preview frame and detects a printed three-circle target; the user approves or cancels the result. **Clear scale** removes calibration and measurements. *Clear measurements* removes all measurement lines; *Delete selected* removes the current selection. The on-screen ~1 mm scale bar can be dragged; exports use the same position. The bar is labeled `manual` or `auto` depending on how calibration was done.
+## Overview
 
-Single or **burst** capture; burst frame count and interval are stored in `localStorage`. See **[help.html](help.html)** that has a short usage summary.
+Microscopiq shows a live camera feed and lets you calibrate a real-world scale on top of it, either automatically by capturing a printed [three-circle calibration target](microscopiq_scale.svg) and letting the app detect it, or manually by entering a known distance and aligning a line. Once calibrated, a scale bar is overlaid on the preview, and you can draw measurement lines to get absolute distances, or take proportional measurements relative to another line, directly on screen.
+
+Captures can be taken one at a time or as a burst, with configurable frame count and interval for bursts. Images can be exported as PNG, either as a plain capture or with the scale bar and measurements. An optional automatic cropping trims the frame before export.
+
+Because everything runs client-side in vanilla JavaScript, Microscopiq works without installing any software beyond a browser. See **[help.html](help.html)** for more details.
 
 ## Run locally
 
